@@ -43,6 +43,9 @@ class User(UserMixin, db.Model):
         secondaryjoin=(followers.c.follower_id == id),
         back_populates='following')
 
+    
+
+
     def __repr__(self):
         return '<User {}>'.format(self.username)
 
@@ -107,6 +110,9 @@ class User(UserMixin, db.Model):
             return
         return db.session.get(User, id)
 
+    messages_sent: so.WriteOnlyMapped['Message'] = so.relationship(foreign_keys='Message.sender_id', back_populates='sender')
+    messages_received: so.WriteOnlyMapped['Message'] = so.relationship(foreign_keys='Message.recipient_id', back_populates='recipient')
+    last_message_read_time: so.Mapped[Optional[datetime]] = so.mapped_column(nullable=True)
 
 @login.user_loader
 def load_user(id):
@@ -126,3 +132,20 @@ class Post(db.Model):
 
     def __repr__(self):
         return '<Post {}>'.format(self.body)
+
+class Message(db.Model):
+    id: so.Mapped[int] = so.mapped_column(primary_key=True)
+    sender_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('user.id'))
+    recipient_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('user.id'))
+    body: so.Mapped[str] = so.mapped_column(sa.String(140))
+    timestamp: so.Mapped[datetime] = so.mapped_column(
+        index=True, default=lambda: datetime.now(timezone.utc))
+    read: so.Mapped[bool] = so.mapped_column(default=False)
+
+    sender: so.Mapped['User'] = so.relationship(
+        foreign_keys=[sender_id], back_populates='messages_sent')
+    recipient: so.Mapped['User'] = so.relationship(
+        foreign_keys=[recipient_id], back_populates='messages_received')
+
+    def __repr__(self):
+        return f'<Message {self.body}>'

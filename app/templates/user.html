@@ -28,6 +28,12 @@
                     </form>
                 </p>
                 {% endif %}
+                {% if user != current_user %}
+<a href="{{ url_for('messages.inbox', username=user.username) }}"
+   class="btn btn-outline-primary btn-sm">
+  Send message
+</a>
+{% endif %}
             </td>
         </tr>
     </table>
