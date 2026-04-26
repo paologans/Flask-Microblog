@@ -11,27 +11,23 @@ from app.models import User, Message
 @bp.route('/messages/<username>', methods=['GET','POST'])
 @login_required
 def inbox(username=None):
-    # Mark messages as read and update read time
+
     current_user.last_message_read_time = datetime.utcnow()
     db.session.commit()
 
-    # Get all users this person has exchanged messages with
-    # We want one entry per conversation partner, most recent first
     sent_to = db.session.query(Message.recipient_id).filter_by(
         sender_id=current_user.id)
     received_from = db.session.query(Message.sender_id).filter_by(
         recipient_id=current_user.id)
 
-    # Union both sides to get all conversation partners
     partner_ids = sent_to.union(received_from).all()
     partner_ids = [row[0] for row in partner_ids]
 
-    # Load those users, ordered by most recent message
     partners = []
     for pid in partner_ids:
         user = User.query.get(pid)
         if user:
-            # Get the latest message between the two
+
             latest = Message.query.filter(
                 db.or_(
                     db.and_(Message.sender_id == current_user.id,
@@ -42,10 +38,9 @@ def inbox(username=None):
             ).order_by(Message.timestamp.desc()).first()
             partners.append((user, latest))
 
-    # Sort by latest message timestamp descending
+
     partners.sort(key=lambda x: x[1].timestamp, reverse=True)
 
-    # Active conversation
     active_user = None
     messages = []
     form = None

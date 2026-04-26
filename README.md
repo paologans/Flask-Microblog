@@ -1,3 +1,6 @@
 # Welcome to Microblog!
 
-This is an example application featured in my [Flask Mega-Tutorial](https://blog.miguelgrinberg.com/post/the-flask-mega-tutorial-part-i-hello-world). See the tutorial for instructions on how to work with it.
+This is a project based on the Flask Mega-Tutorial by Miguel Grinberg. The repo can be found here https://github.com/miguelgrinberg/microblog.
+
+Leveraging AI, I have added and debugged custom features. Currently, the additional features are as follows:
+1. Functional messaging system between users, implemented with a new Message model and bidirectional user relationships to track sent and received messages.
