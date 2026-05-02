@@ -1,6 +1,7 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from flask import render_template, redirect, url_for, request, flash
 from flask_login import current_user, login_required
+import sqlalchemy as sa
 from app import db
 from app.messages import bp
 from app.messages.forms import MessageForm
@@ -8,36 +9,34 @@ from app.models import User, Message
 
 
 @bp.route('/messages')
-@bp.route('/messages/<username>', methods=['GET','POST'])
+@bp.route('/messages/<username>', methods=['GET', 'POST'])
 @login_required
 def inbox(username=None):
-
-    current_user.last_message_read_time = datetime.utcnow()
+    current_user.last_message_read_time = datetime.now(timezone.utc)
     db.session.commit()
 
-    sent_to = db.session.query(Message.recipient_id).filter_by(
-        sender_id=current_user.id)
-    received_from = db.session.query(Message.sender_id).filter_by(
-        recipient_id=current_user.id)
+    sent_to = sa.select(Message.recipient_id).where(
+        Message.sender_id == current_user.id)
+    received_from = sa.select(Message.sender_id).where(
+        Message.recipient_id == current_user.id)
 
-    partner_ids = sent_to.union(received_from).all()
-    partner_ids = [row[0] for row in partner_ids]
+    partner_ids = db.session.scalars(sent_to.union(received_from)).all()
 
     partners = []
     for pid in partner_ids:
-        user = User.query.get(pid)
+        user = db.session.get(User, pid)
         if user:
-
-            latest = Message.query.filter(
-                db.or_(
-                    db.and_(Message.sender_id == current_user.id,
-                            Message.recipient_id == pid),
-                    db.and_(Message.sender_id == pid,
-                            Message.recipient_id == current_user.id)
-                )
-            ).order_by(Message.timestamp.desc()).first()
+            latest = db.session.scalar(
+                sa.select(Message).where(
+                    sa.or_(
+                        sa.and_(Message.sender_id == current_user.id,
+                                Message.recipient_id == pid),
+                        sa.and_(Message.sender_id == pid,
+                                Message.recipient_id == current_user.id)
+                    )
+                ).order_by(Message.timestamp.desc())
+            )
             partners.append((user, latest))
-
 
     partners.sort(key=lambda x: x[1].timestamp, reverse=True)
 
@@ -47,7 +46,7 @@ def inbox(username=None):
     has_more = False
 
     if username:
-        active_user = User.query.filter_by(username=username).first_or_404()
+        active_user = db.first_or_404(sa.select(User).where(User.username == username))
         form = MessageForm()
 
         if form.validate_on_submit():
@@ -60,15 +59,17 @@ def inbox(username=None):
             return redirect(url_for('messages.inbox', username=username))
 
         PAGE = 20
-        msgs = Message.query.filter(
-            db.or_(
-                db.and_(Message.sender_id == current_user.id,
-                        Message.recipient_id == active_user.id),
-                db.and_(Message.sender_id == active_user.id,
-                        Message.recipient_id == current_user.id)
-            )
-        ).order_by(Message.timestamp.desc()).limit(PAGE).all()
-        msgs.reverse()
+        msgs = db.session.scalars(
+            sa.select(Message).where(
+                sa.or_(
+                    sa.and_(Message.sender_id == current_user.id,
+                            Message.recipient_id == active_user.id),
+                    sa.and_(Message.sender_id == active_user.id,
+                            Message.recipient_id == current_user.id)
+                )
+            ).order_by(Message.timestamp.desc()).limit(PAGE)
+        ).all()
+        msgs = list(reversed(msgs))
         messages = msgs
         has_more = len(msgs) == PAGE
 
@@ -83,23 +84,25 @@ def inbox(username=None):
 @bp.route('/messages/<username>/history')
 @login_required
 def message_history(username):
-    partner = User.query.filter_by(username=username).first_or_404()
+    partner = db.first_or_404(sa.select(User).where(User.username == username))
     before_id = request.args.get('before_id', type=int)
     limit = 20
 
-    query = Message.query.filter(
-        db.or_(
-            db.and_(Message.sender_id == current_user.id,
+    query = sa.select(Message).where(
+        sa.or_(
+            sa.and_(Message.sender_id == current_user.id,
                     Message.recipient_id == partner.id),
-            db.and_(Message.sender_id == partner.id,
+            sa.and_(Message.sender_id == partner.id,
                     Message.recipient_id == current_user.id)
         )
     )
     if before_id:
-        query = query.filter(Message.id < before_id)
+        query = query.where(Message.id < before_id)
 
-    msgs = query.order_by(Message.timestamp.desc()).limit(limit).all()
-    msgs.reverse()
+    msgs = db.session.scalars(
+        query.order_by(Message.timestamp.desc()).limit(limit)
+    ).all()
+    msgs = list(reversed(msgs))
 
     return {
         'messages': [{

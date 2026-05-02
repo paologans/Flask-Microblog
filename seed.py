@@ -1,8 +1,11 @@
+import json
 import random
 from datetime import datetime, timezone, timedelta
 from faker import Faker
+import sqlalchemy as sa
 from app import create_app, db
 from app.models import User, Post, Message
+from app.embeddings import embed_batch
 
 fake = Faker()
 Faker.seed(42)
@@ -373,6 +376,14 @@ with app.app_context():
         others = [u for u in users if u != user]
         for target in random.sample(others, random.randint(5, 15)):
             user.follow(target)
+
+    print('Generating embeddings for posts...')
+    all_posts = db.session.scalars(sa.select(Post)).all()
+    bodies = [p.body for p in all_posts]
+    vectors = embed_batch(bodies)
+    for post, vec in zip(all_posts, vectors):
+        post.embedding = json.dumps(vec)
+    db.session.flush()
 
     print('Creating conversations...')
     pairs = set()

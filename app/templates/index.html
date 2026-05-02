@@ -47,9 +47,15 @@ document.addEventListener('DOMContentLoaded', function() {
     improveBtn.textContent = 'Improve with AI';
     wrapper.appendChild(improveBtn);
 
+    let errorDiv = document.createElement('div');
+    errorDiv.className = 'text-danger small mt-1';
+    errorDiv.style.display = 'none';
+    wrapper.parentNode.insertBefore(errorDiv, wrapper.nextSibling);
+
     improveBtn.addEventListener('click', async function() {
         const text = textarea.value.trim();
         if (!text) return;
+        errorDiv.style.display = 'none';
         improveBtn.disabled = true;
         improveBtn.textContent = 'Improving...';
         try {
@@ -59,7 +65,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 body: JSON.stringify({text})
             });
             const data = await response.json();
-            if (data.text) textarea.value = data.text;
+            if (data.text) {
+                textarea.value = data.text;
+            } else if (data.error) {
+                errorDiv.textContent = 'Error: ' + data.error;
+                errorDiv.style.display = 'block';
+            }
+        } catch (e) {
+            errorDiv.textContent = 'Request failed: ' + e.message;
+            errorDiv.style.display = 'block';
         } finally {
             improveBtn.disabled = false;
             improveBtn.textContent = 'Improve with AI';

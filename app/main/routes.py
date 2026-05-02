@@ -10,6 +10,8 @@ from app.main.forms import EditProfileForm, EmptyForm, PostForm
 from app.models import User, Post
 from app.translate import translate
 from app import ai_improve
+from app.retrieval import find_similar_posts
+from app.embeddings import embed_to_json
 from app.main import bp
 
 
@@ -32,7 +34,8 @@ def index():
         except LangDetectException:
             language = ''
         post = Post(body=form.post.data, author=current_user,
-                    language=language)
+                    language=language,
+                    embedding=embed_to_json(form.post.data))
         db.session.add(post)
         db.session.commit()
         flash(_('Your post is now live!'))
@@ -161,6 +164,7 @@ def improve_post():
     if not text:
         return {'error': 'No text provided'}, 400
     try:
-        return {'text': ai_improve.improve_post(text)}
+        similar = find_similar_posts(text, exclude_user_id=current_user.id)
+        return {'text': ai_improve.improve_post(text, similar_posts=similar)}
     except Exception as e:
         return {'error': str(e)}, 500

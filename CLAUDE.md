@@ -77,7 +77,21 @@ Three tables: `User`, `Post`, `Message`. `followers` is an association table for
 
 ### AI Feature (`app/ai_improve.py`)
 
-Uses the `openai` Python package pointed at OpenRouter's base URL (`https://openrouter.ai/api/v1`). Currently uses model `openai/gpt-oss-120b:free`. The `POST /improve-post` route in `app/main/routes.py` calls this and returns JSON — the frontend replaces the textarea value in-place.
+Uses the `openai` Python package pointed at OpenRouter's base URL (`https://openrouter.ai/api/v1`). Uses model `openai/gpt-oss-120b:free` via OpenRouter with reasoning enabled (`extra_body={'reasoning': {'enabled': True}}`). The `POST /improve-post` route in `app/main/routes.py` calls this and returns JSON — the frontend replaces the textarea value in-place.
+
+The feature is RAG-powered: before calling the LLM, the route retrieves the 5 most semantically similar posts from other users and injects them as stylistic reference context.
+
+### RAG Pipeline
+
+**Embeddings (`app/embeddings.py`)** — wraps `sentence-transformers` with the `all-MiniLM-L6-v2` model (384 dimensions, ~90MB, downloaded on first use, then cached). Exposes `embed(text)`, `embed_to_json(text)`, and `embed_batch(texts)`.
+
+**Retrieval (`app/retrieval.py`)** — loads all posts that have embeddings, computes cosine similarity in-memory via `scikit-learn`, and returns the top-k (default 5) excluding the requesting user's own posts.
+
+**Storage** — `Post.embedding` is a `Text` column (nullable) storing a JSON-serialized float list. Works with SQLite — no PostgreSQL/pgvector required.
+
+**On post creation** — `main/routes.py` calls `embed_to_json(body)` and stores it on the `Post` immediately.
+
+**Seed** — `seed.py` batch-encodes all post bodies after creation using `embed_batch()` for efficiency.
 
 ### Inbox / Messaging
 
@@ -91,7 +105,9 @@ Strings wrapped with `_()` or `_l()` are extracted via Babel. Translations live 
 
 | File | Purpose |
 |---|---|
-| `app/ai_improve.py` | OpenRouter-backed post improvement |
+| `app/ai_improve.py` | OpenRouter/Claude-backed post improvement with RAG context |
+| `app/embeddings.py` | sentence-transformers wrapper (`all-MiniLM-L6-v2`) |
+| `app/retrieval.py` | Cosine similarity retrieval over Post embeddings |
 | `app/translate.py` | Microsoft Translator integration |
-| `seed.py` | Full database seeder (30 users, posts, conversations) |
+| `seed.py` | Full database seeder (30 users, posts, conversations, embeddings) |
 | `query_users.py` | CLI table of all users with stats |
