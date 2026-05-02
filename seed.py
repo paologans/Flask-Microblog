@@ -484,6 +484,13 @@ with app.app_context():
     for post, vec in zip(all_posts, vectors):
         post.embedding = json.dumps(vec)
 
+    print('Generating embeddings for messages...')
+    all_messages = db.session.scalars(sa.select(Message)).all()
+    msg_bodies = [m.body for m in all_messages]
+    msg_vectors = embed_batch(msg_bodies)
+    for msg, vec in zip(all_messages, msg_vectors):
+        msg.embedding = json.dumps(vec)
+
     print('Saving to database...')
     db.session.commit()
     print(f'Done! 30 users, {post_index} posts, {len(pairs)} conversations seeded.')

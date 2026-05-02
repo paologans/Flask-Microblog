@@ -79,9 +79,10 @@ Three tables: `User`, `Post`, `Message`. `followers` is an association table for
 
 Uses the `openai` Python package pointed at OpenRouter's base URL (`https://openrouter.ai/api/v1`), model `openai/gpt-oss-120b:free`, reasoning enabled. Both functions share a `_client()` helper.
 
-Two AI functions in `app/ai_improve.py`:
+Three AI functions in `app/ai_improve.py`:
 - `improve_post(text)` — called by `POST /improve-post`; improves a draft post in-place. Direct call, no retrieval.
-- `summarize_conversation(messages, user_a, user_b)` — called by `POST /messages/<username>/summarize`; summarizes up to the last 10 messages (or however many exist) in chronological order. Format passed to LLM: `Username said: "body"` per line. Prompt asks for key topics, tone, and any conclusions/next steps.
+- `chat_response(message, history, username, post_context, message_context)` — called by `POST /chat`; powers the floating chatbot. Builds a system prompt with platform context and any retrieved content, then appends the full conversation history before the current message. Intent detection in the route determines which context to retrieve.
+- `summarize_conversation(messages, user_a, user_b)` — called by `GET /messages/<username>/summarize`; summarizes up to the last 10 messages (or however many exist) in chronological order. Format passed to LLM: `Username said: "body"` per line. Prompt asks for key topics, tone, and any conclusions/next steps.
 
 ### RAG Pipeline
 
@@ -95,7 +96,12 @@ Two AI functions in `app/ai_improve.py`:
 
 **Seed** — `seed.py` batch-encodes all post bodies after creation using `embed_batch()` for efficiency.
 
-The RAG pipeline (`app/retrieval.py`) is built and ready but not yet wired to any route — reserved for a future summarizer or discovery feature.
+The RAG pipeline (`app/retrieval.py`) powers both post and message retrieval for the chatbot:
+- `find_similar_posts(text, k=5)` — semantic search over post embeddings
+- `find_similar_messages(text, user_id, k=8)` — semantic search over the current user's message embeddings only; never accesses other users' messages
+- `find_user_messages(user_id, partner_id=None)` — recent message fetch used by the conversation summarizer
+
+`Message.embedding` (Text, nullable) stores JSON-serialised vectors, same pattern as `Post.embedding`. Generated on send in `messages/routes.py` and batch-generated in `seed.py`.
 
 ### Search (`GET /search`)
 
@@ -123,6 +129,7 @@ Strings wrapped with `_()` or `_l()` are extracted via Babel. Translations live 
 | File | Purpose |
 |---|---|
 | `app/templates/search.html` | Search results page (users + posts, relationship badges, type tabs) |
+| `app/templates/base.html` | Floating chat widget (bottom-right FAB → chat box, all pages) |
 | `app/ai_improve.py` | OpenRouter/Claude-backed post improvement with RAG context |
 | `app/embeddings.py` | sentence-transformers wrapper (`all-MiniLM-L6-v2`) |
 | `app/retrieval.py` | Cosine similarity retrieval over Post embeddings |

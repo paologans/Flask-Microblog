@@ -139,6 +139,8 @@ class Message(db.Model):
         index=True, default=lambda: datetime.now(timezone.utc))
     read: so.Mapped[bool] = so.mapped_column(default=False)
 
+    embedding: so.Mapped[Optional[str]] = so.mapped_column(sa.Text, nullable=True)
+
     sender: so.Mapped['User'] = so.relationship(
         foreign_keys=[sender_id], back_populates='messages_sent')
     recipient: so.Mapped['User'] = so.relationship(

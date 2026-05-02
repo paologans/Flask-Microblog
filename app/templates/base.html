@@ -101,5 +101,178 @@
       );
     </script>
     {% block scripts %}{% endblock %}
+
+    {% if not current_user.is_anonymous %}
+    <!-- Floating chat widget -->
+    <style>
+      #chat-fab {
+        position: fixed; bottom: 28px; right: 28px; z-index: 1050;
+        width: 52px; height: 52px; border-radius: 50%;
+        background: #0d6efd; color: #fff; border: none;
+        font-size: 1.4rem; box-shadow: 0 4px 14px rgba(0,0,0,.25);
+        cursor: pointer; display: flex; align-items: center; justify-content: center;
+        transition: background .15s;
+      }
+      #chat-fab:hover { background: #0b5ed7; }
+      #chat-box {
+        position: fixed; bottom: 92px; right: 28px; z-index: 1050;
+        width: 360px; height: 480px;
+        background: #fff; border-radius: 16px;
+        box-shadow: 0 8px 32px rgba(0,0,0,.18);
+        display: none; flex-direction: column; overflow: hidden;
+      }
+      #chat-box.open { display: flex; }
+      #chat-header {
+        background: #0d6efd; color: #fff;
+        padding: 14px 16px; font-weight: 600; font-size: .95rem;
+        display: flex; align-items: center; justify-content: space-between;
+        flex-shrink: 0;
+      }
+      #chat-close, #chat-clear { background: none; border: none; color: #fff; cursor: pointer; line-height: 1; }
+      #chat-close { font-size: 1.1rem; }
+      #chat-clear { font-size: .75rem; opacity: .8; padding: 2px 6px; border-radius: 4px; }
+      #chat-clear:hover { opacity: 1; background: rgba(255,255,255,.15); }
+      #chat-messages {
+        flex: 1; overflow-y: auto; padding: 14px;
+        display: flex; flex-direction: column; gap: 8px;
+      }
+      .chat-bubble {
+        max-width: 80%; padding: 8px 12px; border-radius: 12px;
+        font-size: .875rem; line-height: 1.45; word-wrap: break-word;
+      }
+      .chat-bubble.user { align-self: flex-end; background: #0d6efd; color: #fff; border-bottom-right-radius: 4px; }
+      .chat-bubble.bot  { align-self: flex-start; background: #f0f2f5; color: #222; border-bottom-left-radius: 4px; }
+      .chat-bubble.bot.thinking { color: #888; font-style: italic; }
+      #chat-input-row {
+        display: flex; gap: 8px; padding: 10px 12px;
+        border-top: 1px solid #e9ecef; flex-shrink: 0;
+      }
+      #chat-input {
+        flex: 1; border: 1px solid #dee2e6; border-radius: 20px;
+        padding: 7px 14px; font-size: .875rem; resize: none;
+        outline: none; max-height: 100px; overflow-y: auto;
+      }
+      #chat-input:focus { border-color: #0d6efd; }
+      #chat-send {
+        background: #0d6efd; color: #fff; border: none;
+        border-radius: 50%; width: 36px; height: 36px; flex-shrink: 0;
+        font-size: .9rem; cursor: pointer; display: flex;
+        align-items: center; justify-content: center;
+      }
+      #chat-send:disabled { background: #a0b4d6; cursor: default; }
+    </style>
+
+    <button id="chat-fab" aria-label="Open assistant">&#x1F4AC;</button>
+
+    <div id="chat-box" role="dialog" aria-label="Assistant">
+      <div id="chat-header">
+        <span>Assistant</span>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <button id="chat-clear" aria-label="Clear chat">Clear</button>
+          <button id="chat-close" aria-label="Close">&times;</button>
+        </div>
+      </div>
+      <div id="chat-messages"></div>
+      <div id="chat-input-row">
+        <textarea id="chat-input" rows="1" placeholder="Ask me anything…"></textarea>
+        <button id="chat-send" aria-label="Send">&#x27A4;</button>
+      </div>
+    </div>
+
+    <script>
+    (function () {
+      const STORAGE_KEY = 'microblog_chat_history';
+
+      const fab      = document.getElementById('chat-fab');
+      const box      = document.getElementById('chat-box');
+      const closeBtn = document.getElementById('chat-close');
+      const clearBtn = document.getElementById('chat-clear');
+      const msgs     = document.getElementById('chat-messages');
+      const input    = document.getElementById('chat-input');
+      const sendBtn  = document.getElementById('chat-send');
+
+      // Load persisted history from localStorage
+      let history = [];
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) history = JSON.parse(stored);
+      } catch (_) { history = []; }
+
+      function save() {
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(history)); } catch (_) {}
+      }
+
+      // Re-render all stored messages on page load
+      history.forEach(entry => {
+        appendBubble(entry.content, entry.role === 'user' ? 'user' : 'bot');
+      });
+
+      fab.addEventListener('click', () => {
+        box.classList.toggle('open');
+        if (box.classList.contains('open')) {
+          msgs.scrollTop = msgs.scrollHeight;
+          input.focus();
+        }
+      });
+      closeBtn.addEventListener('click', () => box.classList.remove('open'));
+      clearBtn.addEventListener('click', () => {
+        history = [];
+        save();
+        msgs.innerHTML = '';
+      });
+
+      function appendBubble(text, role) {
+        const div = document.createElement('div');
+        div.className = 'chat-bubble ' + role;
+        div.textContent = text;
+        msgs.appendChild(div);
+        msgs.scrollTop = msgs.scrollHeight;
+        return div;
+      }
+
+      async function send() {
+        const text = input.value.trim();
+        if (!text) return;
+        input.value = '';
+        input.style.height = 'auto';
+        sendBtn.disabled = true;
+
+        appendBubble(text, 'user');
+        const thinking = appendBubble('Thinking…', 'bot thinking');
+
+        try {
+          const res = await fetch('/chat', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ message: text, history })
+          });
+          const data = await res.json();
+          const reply = data.response || ('Error: ' + (data.error || 'Unknown error'));
+
+          thinking.remove();
+          appendBubble(reply, 'bot');
+          history.push({ role: 'user', content: text });
+          history.push({ role: 'assistant', content: reply });
+          save();
+        } catch (e) {
+          thinking.remove();
+          appendBubble('Request failed: ' + e.message, 'bot');
+        } finally {
+          sendBtn.disabled = false;
+          input.focus();
+        }
+      }
+
+      sendBtn.addEventListener('click', send);
+      input.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+      });
+      input.addEventListener('input', () => {
+        input.style.height = 'auto';
+        input.style.height = input.scrollHeight + 'px';
+      });
+    })();
+    </script>
+    {% endif %}
   </body>
 </html>

@@ -12,6 +12,7 @@ from app.models import User, Post, followers
 from app.translate import translate
 from app import ai_improve
 from app.embeddings import embed_to_json
+from app.retrieval import find_similar_posts, find_similar_messages
 from app.main import bp
 
 
@@ -165,6 +166,47 @@ def improve_post():
         return {'error': 'No text provided'}, 400
     try:
         return {'text': ai_improve.improve_post(text)}
+    except Exception as e:
+        return {'error': str(e)}, 500
+
+
+_MESSAGE_KEYWORDS = [
+    'my message', 'my inbox', 'my chat', 'my conversation',
+    'what did i say', 'what did they say to me', 'message from',
+    'sent me', 'i sent', 'our chat', 'our conversation',
+]
+_POST_KEYWORDS = [
+    'post', 'people saying', 'what are people', 'what are users',
+    'community', 'others saying', 'feed', 'trending', 'someone said',
+    'users say', 'what is being said',
+]
+
+
+@bp.route('/chat', methods=['POST'])
+@login_required
+def chat():
+    data = request.get_json()
+    message = (data or {}).get('message', '').strip()
+    history = (data or {}).get('history', [])
+    if not message:
+        return {'error': 'No message provided'}, 400
+
+    lower = message.lower()
+    wants_messages = any(kw in lower for kw in _MESSAGE_KEYWORDS)
+    wants_posts = any(kw in lower for kw in _POST_KEYWORDS)
+
+    post_context = find_similar_posts(message, k=5) if wants_posts else None
+    message_context = find_similar_messages(message, current_user.id) if wants_messages else None
+
+    try:
+        response = ai_improve.chat_response(
+            message=message,
+            history=history,
+            username=current_user.username,
+            post_context=post_context,
+            message_context=message_context,
+        )
+        return {'response': response}
     except Exception as e:
         return {'error': str(e)}, 500
 

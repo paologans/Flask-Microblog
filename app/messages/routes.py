@@ -6,6 +6,7 @@ from app import db, ai_improve
 from app.messages import bp
 from app.messages.forms import MessageForm
 from app.models import User, Message
+from app.embeddings import embed_to_json
 
 
 @bp.route('/messages')
@@ -52,7 +53,8 @@ def inbox(username=None):
         if form.validate_on_submit():
             msg = Message(sender=current_user,
                           recipient=active_user,
-                          body=form.body.data)
+                          body=form.body.data,
+                          embedding=embed_to_json(form.body.data))
             db.session.add(msg)
             db.session.commit()
             flash('Message sent.')
