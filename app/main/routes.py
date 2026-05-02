@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import re
 from flask import render_template, flash, redirect, url_for, request, g, \
     current_app
 from flask_login import current_user, login_required
@@ -12,7 +13,8 @@ from app.models import User, Post, followers, post_likes
 from app.translate import translate
 from app import ai_improve
 from app.embeddings import embed_to_json
-from app.retrieval import find_similar_posts, find_similar_messages, find_for_you_posts, find_for_you_users
+from app.retrieval import find_similar_posts, find_similar_messages, \
+    find_user_messages, find_for_you_posts, find_for_you_users
 from app.main import bp
 
 
@@ -197,10 +199,30 @@ def improve_post():
 
 
 _MESSAGE_KEYWORDS = [
-    'my message', 'my inbox', 'my chat', 'my conversation',
-    'what did i say', 'what did they say to me', 'message from',
-    'sent me', 'i sent', 'our chat', 'our conversation',
+    'message', 'messages', 'inbox', 'chat', 'chats', 'conversation',
+    'conversations', 'dm', 'dms', 'direct message', 'direct messages',
+    'what did i say', 'what did they say to me', 'what did he say',
+    'what did she say', 'what did they say', 'what did someone say',
+    'what did we talk about', 'what did we discuss', 'talked about',
+    'talk about', 'discussed',
+    'said to me', 'told me', 'sent me',
+    'i sent', 'replied', 'reply from', 'texted', 'text from',
 ]
+_MESSAGE_PATTERNS = [
+    re.compile(r'\bwhat did .+ (say|tell|send|reply)\b'),
+    re.compile(r'\bwhat did (we|you and i) (talk about|discuss)\b'),
+    re.compile(r'\b(messages?|dms?|chats?|conversations?) (with|from|to) .+'),
+    re.compile(r'\b(with|from|to) .+ (messages?|dms?|chats?|conversation)\b'),
+]
+_MESSAGE_PARTNER_PATTERNS = [
+    re.compile(r'\bwhat did (?P<name>[a-z0-9_.-]+) (?:say|tell|send|reply)\b'),
+    re.compile(r'\b(?:messages?|dms?|chats?|conversations?) (?:with|from|to) (?P<name>[a-z0-9_.-]+)\b'),
+    re.compile(r'\b(?:with|from|to) (?P<name>[a-z0-9_.-]+) (?:messages?|dms?|chats?|conversation)\b'),
+]
+_MESSAGE_PARTNER_PRONOUNS = {
+    'i', 'me', 'my', 'we', 'us', 'our', 'you', 'he', 'him', 'she', 'her',
+    'they', 'them', 'someone', 'somebody',
+}
 _POST_KEYWORDS = [
     'post', 'people saying', 'what are people', 'what are users',
     'community', 'others saying', 'feed', 'trending', 'someone said',
@@ -208,21 +230,82 @@ _POST_KEYWORDS = [
 ]
 
 
+def _wants_message_context(message):
+    lower = message.lower()
+    keyword_hit = any(
+        re.search(r'\b' + re.escape(kw) + r'\b', lower)
+        for kw in _MESSAGE_KEYWORDS
+    )
+    return (
+        keyword_hit or
+        any(pattern.search(lower) for pattern in _MESSAGE_PATTERNS)
+    )
+
+
+def _trim_chat_history(history, max_messages=8):
+    if not isinstance(history, list):
+        return []
+    trimmed = []
+    for entry in history:
+        if not isinstance(entry, dict):
+            continue
+        role = entry.get('role')
+        content = entry.get('content')
+        if role not in ('user', 'assistant') or not isinstance(content, str):
+            continue
+        content = content.strip()
+        if content:
+            trimmed.append({'role': role, 'content': content})
+    return trimmed[-max_messages:]
+
+
+def _extract_message_partner(message):
+    lower = message.lower()
+    for pattern in _MESSAGE_PARTNER_PATTERNS:
+        match = pattern.search(lower)
+        if match:
+            name = match.group('name')
+            if name not in _MESSAGE_PARTNER_PRONOUNS:
+                return name
+    return None
+
+
+def _find_message_partner(name):
+    if not name:
+        return None
+    return db.session.scalar(
+        sa.select(User)
+        .where(User.id != current_user.id)
+        .where(sa.func.lower(User.username) == name.lower())
+    )
+
+
 @bp.route('/chat', methods=['POST'])
 @login_required
 def chat():
     data = request.get_json()
     message = (data or {}).get('message', '').strip()
-    history = (data or {}).get('history', [])
+    history = _trim_chat_history((data or {}).get('history', []))
     if not message:
         return {'error': 'No message provided'}, 400
 
     lower = message.lower()
-    wants_messages = any(kw in lower for kw in _MESSAGE_KEYWORDS)
+    wants_messages = _wants_message_context(message)
     wants_posts = any(kw in lower for kw in _POST_KEYWORDS)
 
     post_context = find_similar_posts(message, k=5) if wants_posts else None
-    message_context = find_similar_messages(message, current_user.id) if wants_messages else None
+    message_context = None
+    if wants_messages:
+        partner_name = _extract_message_partner(message)
+        partner = _find_message_partner(partner_name)
+        if partner_name:
+            message_context = find_user_messages(
+                current_user.id,
+                partner_id=partner.id,
+                limit=20,
+            ) if partner else []
+        else:
+            message_context = find_user_messages(current_user.id, limit=30)
 
     try:
         response = ai_improve.chat_response(

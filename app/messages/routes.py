@@ -9,8 +9,8 @@ from app.models import User, Message
 from app.embeddings import embed_to_json
 
 
-@bp.route('/messages')
-@bp.route('/messages/<username>', methods=['GET', 'POST'])
+@bp.route('')
+@bp.route('/<username>', methods=['GET', 'POST'])
 @login_required
 def inbox(username=None):
     current_user.last_message_read_time = datetime.now(timezone.utc)
@@ -81,7 +81,7 @@ def inbox(username=None):
                            form=form)
 
 
-@bp.route('/messages/<username>/history')
+@bp.route('/<username>/history')
 @login_required
 def message_history(username):
     partner = db.first_or_404(sa.select(User).where(User.username == username))
@@ -116,7 +116,7 @@ def message_history(username):
     }
 
 
-@bp.route('/messages/<username>/summarize')
+@bp.route('/<username>/summarize')
 @login_required
 def summarize(username):
     partner = db.first_or_404(sa.select(User).where(User.username == username))

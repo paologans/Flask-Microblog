@@ -35,31 +35,53 @@ def chat_response(message: str, history: list, username: str,
         lines = '\n'.join(
             f'- {p.author.username}: "{p.body}"' for p in post_context
         )
-        context_blocks.append(f'Relevant posts from the community:\n{lines}')
+        context_blocks.append(
+            "## Public Post Context\n"
+            f"Relevant posts from the community:\n{lines}"
+        )
 
     if message_context is not None:
         if message_context:
             lines = '\n'.join(
-                f'{m["from"]} to {m["to"]} ({m["timestamp"]}): "{m["body"]}"'
+                f'- From {m["from"]} to {m["to"]}: "{m["body"]}"'
                 for m in message_context
             )
-            context_blocks.append(f"Relevant messages involving {username}:\n{lines}")
+            context_blocks.append(
+                "## Trusted Message Context\n"
+                f"Messages involving {username}:\n{lines}"
+            )
         else:
-            context_blocks.append(f'No messages found relevant to this query for {username}.')
+            context_blocks.append(
+                "## Trusted Message Context\n"
+                f"No messages found relevant to this query for {username}."
+            )
 
     system_content = (
-        f'You are a helpful assistant embedded in Postmind, an AI-infused social platform. '
-        f'The current user is {username}. '
-        'You can answer general questions, discuss ideas, and help with anything the user needs. '
-        'You also have access to public posts from the community and, when the user asks, '
-        'their own private messages. You must never reveal or infer content from other users\' '
-        'private messages — only the current user\'s. '
-        'IMPORTANT: Only report information that is explicitly present in the context provided '
-        'below. If the context is empty or says no messages were found, tell the user that '
-        'clearly — do not invent, guess, or paraphrase messages that are not shown. '
-        'If a question sounds like it might be answered by their messages and no message '
-        'context was retrieved, you may say: "Would you like me to look through your messages?" '
-        'Be conversational, clear, and concise.'
+        "## Role\n"
+        "You are a helpful assistant embedded in Postmind, an AI-infused social platform.\n\n"
+        "## Current User\n"
+        f"The current user is {username}.\n\n"
+        "## What You Can Help With\n"
+        "- Answer general questions.\n"
+        "- Discuss ideas.\n"
+        "- Help the user write or reason through things.\n"
+        "- Use public post context when it is provided.\n"
+        "- Use the current user's private message conversations when trusted message context is provided.\n\n"
+        "## Private Message Rules\n"
+        "- A private message conversation belongs to the current user when the current user is either the sender or recipient.\n"
+        "- You may summarize or quote messages sent by conversation partners when those messages appear in Trusted Message Context.\n"
+        "- Never reveal or infer private messages that are not present in Trusted Message Context.\n"
+        "- Prior assistant messages are conversation history, not evidence about the user's private messages.\n"
+        "- For questions about messages, chats, DMs, or conversations, use only Trusted Message Context.\n"
+        "- If Trusted Message Context says no relevant messages were found, say that clearly and do not invent or guess.\n"
+        "- If no Trusted Message Context is provided and the user asks about messages, say you need to look through their messages first.\n\n"
+        "## Public Post Rules\n"
+        "- For public posts, only report information explicitly present in the provided post context.\n\n"
+        "## Response Style\n"
+        "- Be conversational, clear, and concise.\n"
+        "- You may use new lines, short paragraphs, or a compact list when it makes the answer easier to read.\n"
+        "- Do not force everything into one continuous paragraph.\n"
+        "- Do not mention message timestamps unless the user specifically asks about time."
     )
 
     if context_blocks:
@@ -91,8 +113,9 @@ def summarize_conversation(messages: list, user_a: str, user_b: str) -> str:
                 'role': 'system',
                 'content': (
                     'You are an assistant that summarizes chat conversations. '
-                    'Write a single short paragraph in plain prose. '
-                    'Do not use bullet points, headers, bold text, or labeled sections. '
+                    'Write a concise, readable summary in plain prose. '
+                    'You may use short paragraphs or line breaks if that makes it easier to read. '
+                    'Do not use timestamps. '
                     'Just describe what was talked about naturally, as if explaining it to someone.'
                 )
             },

@@ -440,18 +440,18 @@ class MessagesRoutesCase(unittest.TestCase):
         self.app_context.pop()
 
     def test_inbox_requires_login(self):
-        rv = self.client.get('/messages/messages/bob', follow_redirects=True)
+        rv = self.client.get('/messages/bob', follow_redirects=True)
         self.assertIn(b'Sign In', rv.data)
 
     def test_inbox_loads(self):
         _login(self.client, 'alice')
-        rv = self.client.get('/messages/messages/bob')
+        rv = self.client.get('/messages/bob')
         self.assertEqual(rv.status_code, 200)
 
     @patch('app.messages.routes.embed_to_json', return_value=None)
     def test_send_message(self, _mock):
         _login(self.client, 'alice')
-        rv = self.client.post('/messages/messages/bob', data={'body': 'hey bob!'},
+        rv = self.client.post('/messages/bob', data={'body': 'hey bob!'},
                               follow_redirects=True)
         self.assertEqual(rv.status_code, 200)
         m = db.session.scalar(sa.select(Message).where(Message.body == 'hey bob!'))
@@ -464,7 +464,7 @@ class MessagesRoutesCase(unittest.TestCase):
         db.session.add(m)
         db.session.commit()
         _login(self.client, 'alice')
-        rv = self.client.get(f'/messages/messages/bob/history?before_id={m.id + 1}')
+        rv = self.client.get(f'/messages/bob/history?before_id={m.id + 1}')
         self.assertEqual(rv.status_code, 200)
         data = rv.get_json()
         self.assertIn('messages', data)
@@ -472,7 +472,7 @@ class MessagesRoutesCase(unittest.TestCase):
 
     def test_message_history_empty(self):
         _login(self.client, 'alice')
-        rv = self.client.get('/messages/messages/bob/history?before_id=1')
+        rv = self.client.get('/messages/bob/history?before_id=1')
         self.assertEqual(rv.status_code, 200)
         data = rv.get_json()
         self.assertEqual(data['messages'], [])
@@ -480,8 +480,73 @@ class MessagesRoutesCase(unittest.TestCase):
 
     def test_inbox_partner_not_found(self):
         _login(self.client, 'alice')
-        rv = self.client.get('/messages/messages/nobody')
+        rv = self.client.get('/messages/nobody')
         self.assertEqual(rv.status_code, 404)
+
+    @patch('app.main.routes.ai_improve.chat_response')
+    def test_chat_message_question_uses_named_partner_context(self, mock_chat):
+        msg = Message(sender=self.u2, recipient=self.u1,
+                      body='The launch moved to Friday')
+        db.session.add(msg)
+        db.session.commit()
+        mock_chat.return_value = 'summary from context'
+
+        _login(self.client, 'alice')
+        rv = self.client.post('/chat', json={
+            'message': 'what did bob say?',
+            'history': [],
+        })
+
+        self.assertEqual(rv.status_code, 200)
+        kwargs = mock_chat.call_args.kwargs
+        self.assertEqual(kwargs['message_context'][0]['from'], 'bob')
+        self.assertEqual(kwargs['message_context'][0]['to'], 'alice')
+        self.assertEqual(kwargs['message_context'][0]['body'],
+                         'The launch moved to Friday')
+
+    @patch('app.main.routes.ai_improve.chat_response')
+    def test_chat_what_did_i_say_uses_recent_message_context(self, mock_chat):
+        msg = Message(sender=self.u1, recipient=self.u2,
+                      body='I said the launch moved to Friday')
+        db.session.add(msg)
+        db.session.commit()
+        mock_chat.return_value = 'summary from context'
+
+        _login(self.client, 'alice')
+        rv = self.client.post('/chat', json={
+            'message': 'what did i say?',
+            'history': [],
+        })
+
+        self.assertEqual(rv.status_code, 200)
+        kwargs = mock_chat.call_args.kwargs
+        self.assertEqual(kwargs['message_context'][0]['from'], 'alice')
+        self.assertEqual(kwargs['message_context'][0]['to'], 'bob')
+        self.assertEqual(kwargs['message_context'][0]['body'],
+                         'I said the launch moved to Friday')
+
+    @patch('app.main.routes.ai_improve.chat_response')
+    def test_chat_what_did_we_talk_about_uses_recent_message_context(self, mock_chat):
+        db.session.add_all([
+            Message(sender=self.u1, recipient=self.u2,
+                    body='Are we still meeting tomorrow?'),
+            Message(sender=self.u2, recipient=self.u1,
+                    body='Yes, same time as planned.'),
+        ])
+        db.session.commit()
+        mock_chat.return_value = 'summary from context'
+
+        _login(self.client, 'alice')
+        rv = self.client.post('/chat', json={
+            'message': 'what did we talk about?',
+            'history': [],
+        })
+
+        self.assertEqual(rv.status_code, 200)
+        kwargs = mock_chat.call_args.kwargs
+        bodies = [m['body'] for m in kwargs['message_context']]
+        self.assertIn('Are we still meeting tomorrow?', bodies)
+        self.assertIn('Yes, same time as planned.', bodies)
 
 
 if __name__ == '__main__':

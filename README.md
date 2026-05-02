@@ -196,8 +196,6 @@ flask translate update
 flask translate compile
 ```
 
-
-
 ## Credits
 
 This project began as a version of Miguel Grinberg's Flask Mega-Tutorial application.
