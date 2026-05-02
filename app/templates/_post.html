@@ -23,6 +23,14 @@
                                 '{{ post.language or '' }}',
                                 '{{ g.locale }}');">{{ _('Translate') }}</a>
                 </span>
+                <br>
+                <span id="like-count-{{ post.id }}" class="text-muted small me-1">{{ post.like_count() }}</span><button
+                    id="like-btn-{{ post.id }}"
+                    onclick="likePost({{ post.id }})"
+                    class="btn btn-link p-0 border-0"
+                    style="color: {% if post.is_liked_by(current_user) %}#0d6efd{% else %}#6c757d{% endif %}; font-size: 1.1rem; line-height: 1;">
+                    <i id="like-icon-{{ post.id }}" class="bi {% if post.is_liked_by(current_user) %}bi-hand-thumbs-up-fill{% else %}bi-hand-thumbs-up{% endif %}"></i>
+                </button>
             </td>
         </tr>
     </table>

@@ -8,11 +8,11 @@ import sqlalchemy.orm as so
 from langdetect import detect, LangDetectException
 from app import db
 from app.main.forms import EditProfileForm, EmptyForm, PostForm, SearchForm
-from app.models import User, Post, followers
+from app.models import User, Post, followers, post_likes
 from app.translate import translate
 from app import ai_improve
 from app.embeddings import embed_to_json
-from app.retrieval import find_similar_posts, find_similar_messages
+from app.retrieval import find_similar_posts, find_similar_messages, find_for_you_posts, find_for_you_users
 from app.main import bp
 
 
@@ -57,17 +57,29 @@ def index():
 @bp.route('/explore')
 @login_required
 def explore():
-    page = request.args.get('page', 1, type=int)
-    query = sa.select(Post).order_by(Post.timestamp.desc())
-    posts = db.paginate(query, page=page,
-                        per_page=current_app.config['POSTS_PER_PAGE'],
-                        error_out=False)
-    next_url = url_for('main.explore', page=posts.next_num) \
-        if posts.has_next else None
-    prev_url = url_for('main.explore', page=posts.prev_num) \
-        if posts.has_prev else None
-    return render_template('index.html', title=_('Explore'),
-                           posts=posts.items, next_url=next_url,
+    tab = request.args.get('tab', 'posts')
+    per_page = current_app.config['POSTS_PER_PAGE']
+
+    recommended_posts = []
+    next_url = None
+    prev_url = None
+    recommended_users = []
+
+    if tab == 'users':
+        recommended_users = find_for_you_users(current_user, limit=10)
+    else:
+        page = request.args.get('page', 1, type=int)
+        recommended_posts, total = find_for_you_posts(current_user, page=page, per_page=per_page)
+        if page > 1:
+            prev_url = url_for('main.explore', tab='posts', page=page - 1)
+        if page * per_page < total:
+            next_url = url_for('main.explore', tab='posts', page=page + 1)
+
+    return render_template('for_you.html', title=_('For You'),
+                           tab=tab,
+                           posts=recommended_posts,
+                           users=recommended_users,
+                           next_url=next_url,
                            prev_url=prev_url)
 
 
@@ -146,6 +158,20 @@ def unfollow(username):
         return redirect(url_for('main.user', username=username))
     else:
         return redirect(url_for('main.index'))
+
+
+@bp.route('/like/<int:post_id>', methods=['POST'])
+@login_required
+def like_post(post_id):
+    post = db.get_or_404(Post, post_id)
+    if post.is_liked_by(current_user):
+        post.liked_by.remove(current_user)
+        liked = False
+    else:
+        post.liked_by.add(current_user)
+        liked = True
+    db.session.commit()
+    return {'liked': liked, 'count': post.like_count()}
 
 
 @bp.route('/translate', methods=['POST'])

@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+
+    <h4 class="mb-3">{{ _('For You') }}</h4>
+
+    <ul class="nav nav-tabs mb-4">
+      <li class="nav-item">
+        <a class="nav-link {% if tab == 'posts' %}active{% endif %}"
+           href="{{ url_for('main.explore', tab='posts') }}">{{ _('Posts') }}</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link {% if tab == 'users' %}active{% endif %}"
+           href="{{ url_for('main.explore', tab='users') }}">{{ _('Users') }}</a>
+      </li>
+    </ul>
+
+    {% if tab == 'posts' %}
+      {% if posts %}
+        {% for post in posts %}
+          {% include '_post.html' %}
+        {% endfor %}
+        <nav aria-label="Post navigation">
+          <ul class="pagination">
+            <li class="page-item{% if not prev_url %} disabled{% endif %}">
+              <a class="page-link" href="{{ prev_url or '#' }}">
+                <span aria-hidden="true">&larr;</span> {{ _('Previous') }}
+              </a>
+            </li>
+            <li class="page-item{% if not next_url %} disabled{% endif %}">
+              <a class="page-link" href="{{ next_url or '#' }}">
+                {{ _('Next') }} <span aria-hidden="true">&rarr;</span>
+              </a>
+            </li>
+          </ul>
+        </nav>
+      {% else %}
+        <p class="text-muted">
+          {{ _('Post or like some content to get personalized recommendations.') }}
+        </p>
+      {% endif %}
+
+    {% else %}
+      {% if users %}
+        {% for u in users %}
+        <div class="d-flex align-items-center p-3 mb-2 border rounded">
+          <a href="{{ url_for('main.user', username=u.username) }}">
+            <img src="{{ u.avatar(48) }}" class="rounded-circle me-3" style="flex-shrink:0;">
+          </a>
+          <div class="flex-grow-1 overflow-hidden">
+            <div class="d-flex align-items-center">
+              <a href="{{ url_for('main.user', username=u.username) }}"
+                 class="fw-semibold text-dark text-decoration-none">
+                {{ u.username }}
+              </a>
+              {% if current_user.is_following(u) and u.is_following(current_user) %}
+                <span class="badge bg-success ms-2">{{ _('Mutual') }}</span>
+              {% elif current_user.is_following(u) %}
+                <span class="badge bg-primary ms-2">{{ _('Following') }}</span>
+              {% elif u.is_following(current_user) %}
+                <span class="badge bg-secondary ms-2">{{ _('Follows you') }}</span>
+              {% endif %}
+            </div>
+            {% if u.about_me %}
+            <div class="text-muted small text-truncate">{{ u.about_me }}</div>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <p class="text-muted">
+          {{ _('No user recommendations yet. Follow users or write posts to get started.') }}
+        </p>
+      {% endif %}
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}

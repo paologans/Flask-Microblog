@@ -101,6 +101,11 @@ The RAG pipeline (`app/retrieval.py`) powers both post and message retrieval for
 - `find_similar_messages(text, user_id, k=8)` — semantic search over the current user's message embeddings only; never accesses other users' messages
 - `find_user_messages(user_id, partner_id=None)` — recent message fetch used by the conversation summarizer
 
+**For You feed (`app/retrieval.py`)** — personalized recommendation pipeline:
+- `build_user_interest_vector(user)` — weighted average of the user's own post embeddings (50%), liked post embeddings (35%), and posts from users they follow (15%). Re-normalizes if any signal is missing. Returns `None` if no signals exist.
+- `find_for_you_posts(user, page, per_page)` — ranks all posts (excluding the user's own) by cosine similarity to the interest vector; returns `(posts, total)` for pagination. Falls back to chronological if interest vector is `None`.
+- `find_for_you_users(user, limit=10)` — scores all other users by comparing their average post embedding to the current user's interest vector; returns top `limit` by similarity.
+
 `Message.embedding` (Text, nullable) stores JSON-serialised vectors, same pattern as `Post.embedding`. Generated on send in `messages/routes.py` and batch-generated in `seed.py`.
 
 ### Search (`GET /search`)
@@ -124,15 +129,67 @@ The inbox uses lazy-loading: `GET /messages/<username>` renders only the 20 most
 
 Strings wrapped with `_()` or `_l()` are extracted via Babel. Translations live in `app/translations/<lang>/LC_MESSAGES/`. The active locale is resolved from `Accept-Language` headers against `Config.LANGUAGES = ['en', 'es']`.
 
+## Development Guidelines
+
+### Workflow
+- Always run `python -m pytest tests.py` after any code change before marking a task done
+- Always run `flask db migrate -m "description"` + `flask db upgrade` after any model change
+- Never add a new pip dependency without asking the user first
+- Never push to remote without explicit user confirmation
+- Never delete files or drop database tables without asking first
+
+### Code Style
+- Follow existing patterns in the file being edited — don't introduce new abstractions unless the task requires it
+- All new timestamps must use `datetime.now(timezone.utc)` — never naive datetimes
+- Keep new routes inside the existing blueprint structure (`main`, `auth`, `messages`, `errors`) — don't create new blueprints without discussion
+
+### UI / Templates
+- All new templates must use Bootstrap 5 components and match the existing card/form/button patterns
+- Use the local `bootstrap_wtf.html` macro (`{{ wtf.quick_form(form) }}`) for all WTForms rendering — do not inline raw HTML form fields
+- JavaScript goes in `{% block scripts %}` — never inline `<script>` tags outside that block
+
+### AI & External Services
+- Always use OpenRouter (`https://openrouter.ai/api/v1`) via the `openai` Python package — never call Anthropic or OpenAI APIs directly
+- Never store raw API responses in the database
+- New AI features follow the pattern in `app/ai_improve.py` — shared `_client()` helper, model `openai/gpt-oss-120b:free`
+
+### Refer to Official Documentation
+When implementing or debugging features, always consult the official docs for the relevant library (see section below) rather than relying on assumptions or outdated patterns.
+
+---
+
+## Official Documentation
+
+| Library / Framework | Docs URL |
+|---|---|
+| Flask | https://flask.palletsprojects.com/en/stable/ |
+| SQLAlchemy | https://docs.sqlalchemy.org/en/20/ |
+| Flask-SQLAlchemy | https://flask-sqlalchemy.palletsprojects.com/en/stable/ |
+| Flask-Migrate (Alembic) | https://flask-migrate.readthedocs.io/en/latest/ |
+| Flask-Login | https://flask-login.readthedocs.io/en/latest/ |
+| Flask-WTF / WTForms | https://flask-wtf.readthedocs.io/en/stable/ |
+| Flask-Mail | https://flask-mail.readthedocs.io/en/latest/ |
+| Flask-Moment | https://flask-moment.readthedocs.io/en/latest/ |
+| Flask-Babel | https://python-babel.github.io/flask-babel/ |
+| Jinja2 | https://jinja.palletsprojects.com/en/stable/ |
+| Bootstrap 5 | https://getbootstrap.com/docs/5.3/ |
+| sentence-transformers | https://www.sbert.net/docs/ |
+| scikit-learn | https://scikit-learn.org/stable/documentation.html |
+| openai Python SDK | https://platform.openai.com/docs/libraries/python-library |
+| OpenRouter API | https://openrouter.ai/docs |
+
+---
+
 ## Key Files Added Beyond the Base Tutorial
 
 | File | Purpose |
 |---|---|
 | `app/templates/search.html` | Search results page (users + posts, relationship badges, type tabs) |
+| `app/templates/for_you.html` | For You page — Posts tab (paginated, similarity-ranked) and Users tab (top 10 by interest match) |
 | `app/templates/base.html` | Floating chat widget (bottom-right FAB → chat box, all pages) |
 | `app/ai_improve.py` | OpenRouter/Claude-backed post improvement with RAG context |
 | `app/embeddings.py` | sentence-transformers wrapper (`all-MiniLM-L6-v2`) |
-| `app/retrieval.py` | Cosine similarity retrieval over Post embeddings |
+| `app/retrieval.py` | Cosine similarity retrieval over Post embeddings; For You feed ranking (`build_user_interest_vector`, `find_for_you_posts`, `find_for_you_users`) |
 | `app/translate.py` | Microsoft Translator integration |
 | `seed.py` | Full database seeder — 30 users, varied posts (phrases/sentences/paragraphs), 15 natural conversation templates with variable timing (seconds to days between messages), embeddings |
 | `query_users.py` | CLI table of all users with stats |

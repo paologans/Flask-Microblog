@@ -1,7 +1,8 @@
 {% extends "base.html" %}
 
 {% block outer_content %}
-<div style="height: calc(100vh - var(--nav-h, 57px)); display: flex; flex-direction: column; overflow: hidden;">
+<div class="container mt-3">
+<div style="height: calc(100vh - var(--nav-h, 57px) - 1rem); display: flex; flex-direction: column; overflow: hidden;">
 
   <div class="d-flex flex-row" style="flex: 1; overflow: hidden;">
 
@@ -120,6 +121,7 @@
     </div>
 
   </div>
+</div>
 </div>
 {% endblock %}
 

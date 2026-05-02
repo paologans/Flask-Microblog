@@ -20,6 +20,15 @@ followers = sa.Table(
               primary_key=True)
 )
 
+post_likes = sa.Table(
+    'post_likes',
+    db.metadata,
+    sa.Column('user_id', sa.Integer, sa.ForeignKey('user.id'),
+              primary_key=True),
+    sa.Column('post_id', sa.Integer, sa.ForeignKey('post.id'),
+              primary_key=True)
+)
+
 
 class User(UserMixin, db.Model):
     id: so.Mapped[int] = so.mapped_column(primary_key=True)
@@ -126,6 +135,18 @@ class Post(db.Model):
     embedding: so.Mapped[Optional[str]] = so.mapped_column(sa.Text, nullable=True)
 
     author: so.Mapped[User] = so.relationship(back_populates='posts')
+    liked_by: so.WriteOnlyMapped['User'] = so.relationship(
+        secondary=post_likes, primaryjoin=(post_likes.c.post_id == id),
+        secondaryjoin=(post_likes.c.user_id == User.id))
+
+    def like_count(self):
+        query = sa.select(sa.func.count()).select_from(
+            self.liked_by.select().subquery())
+        return db.session.scalar(query)
+
+    def is_liked_by(self, user):
+        query = self.liked_by.select().where(User.id == user.id)
+        return db.session.scalar(query) is not None
 
     def __repr__(self):
         return '<Post {}>'.format(self.body)
