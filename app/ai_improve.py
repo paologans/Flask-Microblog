@@ -16,7 +16,7 @@ def improve_post(text: str) -> str:
         messages=[{
             'role': 'user',
             'content': (
-                'Improve the following microblog post to make it more engaging, '
+                'Improve the following Postmind post to make it more engaging, '
                 'clear, and expressive. Return ONLY the improved post text with '
                 'no explanation or quotes. Keep it under 140 characters.\n\n'
                 f'Post: {text}'
@@ -48,7 +48,7 @@ def chat_response(message: str, history: list, username: str,
             context_blocks.append(f'No messages found relevant to this query for {username}.')
 
     system_content = (
-        f'You are a helpful assistant embedded in a microblog platform. '
+        f'You are a helpful assistant embedded in Postmind, an AI-infused social platform. '
         f'The current user is {username}. '
         'You can answer general questions, discuss ideas, and help with anything the user needs. '
         'You also have access to public posts from the community and, when the user asks, '
