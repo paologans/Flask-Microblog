@@ -2,7 +2,10 @@
 
 Postmind is an AI-infused social media web app built with Flask. From a simple blog, it grew into a more complete social platform with user accounts, short-form posts, following, private messaging, search, translation, recommendations, and AI assistance woven into the posting and conversation experience.
 
-The name **Postmind** reflects the app's focus on thoughtful posting, intelligent discovery, and AI-assisted conversations.
+
+Sample Home Page
+
+![alt text](images/image.png)
 
 ## What It Does
 
@@ -36,8 +39,13 @@ Current AI experiences include:
 
 - **Improve with AI**: the post composer can open an AI assistant panel that rewrites a draft while keeping it under the app's 140-character post limit.
 ![alt text](images/improvewithai.png)
+
 - **Floating assistant**: authenticated users can ask general questions from any page. When the question appears to ask about community posts or the user's own messages, the route retrieves relevant context before calling the model.
+![alt text](images/floatingassistant.png.png)
+
 - **Conversation summaries**: message threads include a Summarize button that condenses recent messages into a short plain-language recap.
+![alt text](images/messagesummary.png.png)
+
 - **Retrieval-augmented context**: public posts and the current user's own messages are embedded and searched semantically. The assistant is instructed not to invent missing private-message content or reveal messages outside the current user's access.
 
 ## Recommendations And Retrieval
