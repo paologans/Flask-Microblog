@@ -24,28 +24,35 @@
         <div class="collapse navbar-collapse" id="navbarSupportedContent">
           <ul class="navbar-nav me-auto mb-2 mb-lg-0">
             <li class="nav-item">
-              <a class="nav-link" aria-current="page" href="{{ url_for('main.index') }}">{{ _('Home') }}</a>
+              <a class="nav-link" href="{{ url_for('main.index') }}">{{ _('Home') }}</a>
             </li>
             <li class="nav-item">
-              <a class="nav-link" aria-current="page" href="{{ url_for('main.explore') }}">{{ _('Explore') }}</a>
+              <a class="nav-link" href="{{ url_for('main.explore') }}">{{ _('Explore') }}</a>
             </li>
           </ul>
-          <ul class="navbar-nav mb-2 mb-lg-0">
+          {% if not current_user.is_anonymous %}
+          <form class="d-flex mx-auto" method="GET" action="{{ url_for('main.search') }}" style="width: 320px;">
+            <input class="form-control form-control-sm" type="search" name="q"
+                   placeholder="{{ _('Search users or posts…') }}"
+                   value="{{ request.args.get('q', '') }}"
+                   aria-label="{{ _('Search') }}">
+            <button class="btn btn-outline-secondary btn-sm ms-1" type="submit">{{ _('Go') }}</button>
+          </form>
+          {% endif %}
+          <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
             {% if current_user.is_anonymous %}
             <li class="nav-item">
-              <a class="nav-link" aria-current="page" href="{{ url_for('auth.login') }}">{{ _('Login') }}</a>
+              <a class="nav-link" href="{{ url_for('auth.login') }}">{{ _('Login') }}</a>
             </li>
             {% else %}
             <li class="nav-item">
-              <a class="nav-link" aria-current="page" href="{{ url_for('messages.inbox') }}">{{ _('Inbox') }}
-
-            </a>
+              <a class="nav-link" href="{{ url_for('messages.inbox') }}">{{ _('Inbox') }}</a>
             </li>
             <li class="nav-item">
-              <a class="nav-link" aria-current="page" href="{{ url_for('main.user', username=current_user.username) }}">{{ _('Profile') }}</a>
+              <a class="nav-link" href="{{ url_for('main.user', username=current_user.username) }}">{{ _('Profile') }}</a>
             </li>
             <li class="nav-item">
-              <a class="nav-link" aria-current="page" href="{{ url_for('auth.logout') }}">{{ _('Logout') }}</a>
+              <a class="nav-link" href="{{ url_for('auth.logout') }}">{{ _('Logout') }}</a>
             </li>
             {% endif %}
           </ul>

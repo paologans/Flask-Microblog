@@ -51,7 +51,7 @@ Required in `.env` (never committed):
 
 | Blueprint | Prefix | Responsibility |
 |---|---|---|
-| `app.main` | `/` | Feed, post creation, user profiles, follow/unfollow |
+| `app.main` | `/` | Feed, post creation, user profiles, follow/unfollow, search |
 | `app.auth` | `/auth` | Login, logout, registration, password reset |
 | `app.messages` | `/messages` | Inbox, conversation view, message send, lazy-load history |
 | `app.errors` | — | 404 / 500 handlers |
@@ -93,6 +93,17 @@ The feature is RAG-powered: before calling the LLM, the route retrieves the 5 mo
 
 **Seed** — `seed.py` batch-encodes all post bodies after creation using `embed_batch()` for efficiency.
 
+### Search (`GET /search`)
+
+Search bar is centered in the navbar (visible to authenticated users only). Accepts `q` (query string) and `type` (`all` | `users` | `posts`, default `all`). Uses `SearchForm` with CSRF disabled (GET form).
+
+Results are ranked by relationship tier using SQLAlchemy `case()` on the `followers` table:
+- Tier 1 — mutual follows
+- Tier 2 — one-way follow (either direction)
+- Tier 3 — no connection
+
+Users matched on `username` and `about_me`. Posts matched on `body`. Results template: `app/templates/search.html` — tab bar for type filter, relationship badges (Mutual / Following / Follows you) on each result.
+
 ### Inbox / Messaging
 
 The inbox uses lazy-loading: `GET /messages/<username>` renders only the 20 most recent messages. Older messages are fetched via `GET /messages/<username>/history?before_id=<id>` (JSON), triggered by an `IntersectionObserver` on a sentinel div at the top of the message list.
@@ -105,6 +116,7 @@ Strings wrapped with `_()` or `_l()` are extracted via Babel. Translations live 
 
 | File | Purpose |
 |---|---|
+| `app/templates/search.html` | Search results page (users + posts, relationship badges, type tabs) |
 | `app/ai_improve.py` | OpenRouter/Claude-backed post improvement with RAG context |
 | `app/embeddings.py` | sentence-transformers wrapper (`all-MiniLM-L6-v2`) |
 | `app/retrieval.py` | Cosine similarity retrieval over Post embeddings |

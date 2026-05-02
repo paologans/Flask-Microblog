@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+
+    <h5 class="mb-3 text-muted">
+      Results for <strong>{{ q }}</strong>
+    </h5>
+
+    <!-- Type filter tabs -->
+    <ul class="nav nav-tabs mb-4">
+      <li class="nav-item">
+        <a class="nav-link {% if result_type == 'all' %}active{% endif %}"
+           href="{{ url_for('main.search', q=q, type='all') }}">All</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link {% if result_type == 'users' %}active{% endif %}"
+           href="{{ url_for('main.search', q=q, type='users') }}">Users</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link {% if result_type == 'posts' %}active{% endif %}"
+           href="{{ url_for('main.search', q=q, type='posts') }}">Posts</a>
+      </li>
+    </ul>
+
+    {% macro relationship_badge(user) %}
+      {% if current_user.is_following(user) and user.is_following(current_user) %}
+        <span class="badge bg-success ms-1">Mutual</span>
+      {% elif current_user.is_following(user) %}
+        <span class="badge bg-primary ms-1">Following</span>
+      {% elif user.is_following(current_user) %}
+        <span class="badge bg-secondary ms-1">Follows you</span>
+      {% endif %}
+    {% endmacro %}
+
+    <!-- Users section -->
+    {% if result_type in ('all', 'users') %}
+    <section class="mb-5">
+      {% if result_type == 'all' %}
+      <h6 class="text-uppercase text-muted fw-semibold mb-3" style="font-size: 0.75rem; letter-spacing: 0.05em;">Users</h6>
+      {% endif %}
+
+      {% if user_results %}
+        {% for u in user_results %}
+        <div class="d-flex align-items-center p-3 mb-2 border rounded">
+          <a href="{{ url_for('main.user', username=u.username) }}">
+            <img src="{{ u.avatar(48) }}" class="rounded-circle me-3" style="flex-shrink:0;">
+          </a>
+          <div class="flex-grow-1 overflow-hidden">
+            <div class="d-flex align-items-center">
+              <a href="{{ url_for('main.user', username=u.username) }}" class="fw-semibold text-dark text-decoration-none">
+                {{ u.username }}
+              </a>
+              {{ relationship_badge(u) }}
+            </div>
+            {% if u.about_me %}
+            <div class="text-muted small text-truncate">{{ u.about_me }}</div>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <p class="text-muted small">No users found for "{{ q }}".</p>
+      {% endif %}
+    </section>
+    {% endif %}
+
+    <!-- Posts section -->
+    {% if result_type in ('all', 'posts') %}
+    <section>
+      {% if result_type == 'all' %}
+      <h6 class="text-uppercase text-muted fw-semibold mb-3" style="font-size: 0.75rem; letter-spacing: 0.05em;">Posts</h6>
+      {% endif %}
+
+      {% if post_results %}
+        {% for post in post_results %}
+        <div class="d-flex p-3 mb-2 border rounded">
+          <a href="{{ url_for('main.user', username=post.author.username) }}">
+            <img src="{{ post.author.avatar(40) }}" class="rounded-circle me-3" style="flex-shrink:0;">
+          </a>
+          <div class="flex-grow-1 overflow-hidden">
+            <div class="d-flex align-items-center mb-1">
+              <a href="{{ url_for('main.user', username=post.author.username) }}" class="fw-semibold text-dark text-decoration-none small">
+                {{ post.author.username }}
+              </a>
+              {{ relationship_badge(post.author) }}
+              <span class="text-muted ms-2" style="font-size: 0.75rem;">
+                {{ moment(post.timestamp).fromNow() }}
+              </span>
+            </div>
+            <div style="font-size: 0.9rem;">{{ post.body }}</div>
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <p class="text-muted small">No posts found for "{{ q }}".</p>
+      {% endif %}
+    </section>
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}

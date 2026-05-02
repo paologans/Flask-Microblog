@@ -6,8 +6,8 @@ from flask_babel import _, get_locale
 import sqlalchemy as sa
 from langdetect import detect, LangDetectException
 from app import db
-from app.main.forms import EditProfileForm, EmptyForm, PostForm
-from app.models import User, Post
+from app.main.forms import EditProfileForm, EmptyForm, PostForm, SearchForm
+from app.models import User, Post, followers
 from app.translate import translate
 from app import ai_improve
 from app.retrieval import find_similar_posts
@@ -168,3 +168,81 @@ def improve_post():
         return {'text': ai_improve.improve_post(text, similar_posts=similar)}
     except Exception as e:
         return {'error': str(e)}, 500
+
+
+@bp.route('/search')
+@login_required
+def search():
+    form = SearchForm(request.args)
+    if not form.validate():
+        return redirect(url_for('main.index'))
+
+    q = form.q.data.strip()
+    result_type = request.args.get('type', 'all')
+
+    # Subqueries to determine relationship tier for any given user id
+    is_following = (
+        sa.select(followers)
+        .where(followers.c.follower_id == current_user.id)
+        .where(followers.c.followed_id == User.id)
+        .exists()
+    )
+    is_followed_by = (
+        sa.select(followers)
+        .where(followers.c.follower_id == User.id)
+        .where(followers.c.followed_id == current_user.id)
+        .exists()
+    )
+    tier = sa.case(
+        (sa.and_(is_following, is_followed_by), 1),
+        (sa.or_(is_following, is_followed_by), 2),
+        else_=3
+    )
+
+    pattern = f'%{q}%'
+
+    user_results = []
+    if result_type in ('all', 'users'):
+        user_results = db.session.scalars(
+            sa.select(User)
+            .where(User.id != current_user.id)
+            .where(sa.or_(
+                User.username.ilike(pattern),
+                User.about_me.ilike(pattern)
+            ))
+            .order_by(tier, User.username)
+        ).all()
+
+    post_results = []
+    if result_type in ('all', 'posts'):
+        # Alias User for the join so tier subquery still refers to User.id correctly
+        Author = sa.orm.aliased(User, flat=True)
+        author_is_following = (
+            sa.select(followers)
+            .where(followers.c.follower_id == current_user.id)
+            .where(followers.c.followed_id == Author.id)
+            .exists()
+        )
+        author_is_followed_by = (
+            sa.select(followers)
+            .where(followers.c.follower_id == Author.id)
+            .where(followers.c.followed_id == current_user.id)
+            .exists()
+        )
+        author_tier = sa.case(
+            (sa.and_(author_is_following, author_is_followed_by), 1),
+            (sa.or_(author_is_following, author_is_followed_by), 2),
+            else_=3
+        )
+        post_results = db.session.scalars(
+            sa.select(Post)
+            .join(Author, Post.author)
+            .where(Post.body.ilike(pattern))
+            .order_by(author_tier, Post.timestamp.desc())
+        ).all()
+
+    return render_template('search.html', title=_('Search'),
+                           q=q, result_type=result_type,
+                           user_results=user_results,
+                           post_results=post_results,
+                           form=form)
