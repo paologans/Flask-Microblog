@@ -27,6 +27,105 @@
 
 {% block scripts %}
 {% if form %}
+<style>
+  #improve-chat-panel {
+    display: none;
+    margin-top: 10px;
+    border: 1px solid #dee2e6;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #fff;
+    box-shadow: 0 2px 12px rgba(0,0,0,.08);
+  }
+  #improve-chat-header {
+    background: linear-gradient(135deg, #0d6efd, #6610f2);
+    color: #fff;
+    padding: 10px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: .875rem;
+    font-weight: 600;
+  }
+  #improve-chat-close {
+    background: none; border: none; color: #fff;
+    font-size: 1.1rem; cursor: pointer; line-height: 1; padding: 0;
+    opacity: .8;
+  }
+  #improve-chat-close:hover { opacity: 1; }
+  #improve-chat-messages {
+    max-height: 240px;
+    overflow-y: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .improve-msg-row { display: flex; flex-direction: column; }
+  .improve-msg-row.user { align-items: flex-end; }
+  .improve-msg-row.bot  { align-items: flex-start; }
+  .improve-bubble {
+    max-width: 86%;
+    padding: 8px 12px;
+    border-radius: 12px;
+    font-size: .875rem;
+    line-height: 1.45;
+    word-wrap: break-word;
+  }
+  .improve-bubble.user {
+    background: #0d6efd; color: #fff;
+    border-bottom-right-radius: 4px;
+  }
+  .improve-bubble.bot {
+    background: #f0f2f5; color: #222;
+    border-bottom-left-radius: 4px;
+  }
+  .improve-bubble.thinking { color: #888; font-style: italic; }
+  .improve-suggestion-block {
+    max-width: 86%;
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: .875rem;
+    line-height: 1.45;
+    word-wrap: break-word;
+    background: #eef4ff;
+    color: #0a58ca;
+    border-left: 3px solid #0d6efd;
+    font-weight: 500;
+  }
+  #improve-chat-input-row {
+    display: flex; gap: 8px; padding: 10px 12px;
+    border-top: 1px solid #e9ecef;
+  }
+  #improve-chat-input {
+    flex: 1;
+    border: 1px solid #dee2e6;
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-size: .875rem;
+    resize: none;
+    outline: none;
+    max-height: 80px;
+    overflow-y: auto;
+  }
+  #improve-chat-input:focus { border-color: #0d6efd; }
+  #improve-chat-send {
+    background: #0d6efd; color: #fff; border: none;
+    border-radius: 50%; width: 34px; height: 34px; min-width: 34px;
+    font-size: .85rem; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  #improve-chat-send:disabled { background: #a0b4d6; cursor: default; }
+  #improve-chat-apply {
+    background: #198754; color: #fff; border: none;
+    border-radius: 20px; padding: 0 12px; height: 34px;
+    font-size: .8rem; font-weight: 600; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; white-space: nowrap;
+  }
+  #improve-chat-apply:hover { background: #157347; }
+</style>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('post-form');
@@ -36,48 +135,218 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!textarea || !submitBtn) return;
 
     const wrapper = document.createElement('div');
-    wrapper.className = 'd-flex align-items-center gap-2';
+    wrapper.className = 'd-flex align-items-center gap-2 mb-2';
     submitBtn.parentNode.insertBefore(wrapper, submitBtn);
     wrapper.appendChild(submitBtn);
     submitBtn.classList.remove('mb-3');
 
     const improveBtn = document.createElement('button');
     improveBtn.type = 'button';
-    improveBtn.className = 'btn btn-secondary';
-    improveBtn.textContent = 'Improve with AI';
+    improveBtn.className = 'btn btn-outline-secondary';
+    improveBtn.innerHTML = '&#10024; Improve with AI';
     wrapper.appendChild(improveBtn);
 
-    let errorDiv = document.createElement('div');
-    errorDiv.className = 'text-danger small mt-1';
-    errorDiv.style.display = 'none';
-    wrapper.parentNode.insertBefore(errorDiv, wrapper.nextSibling);
+    const chatPanel = document.createElement('div');
+    chatPanel.id = 'improve-chat-panel';
+    chatPanel.innerHTML = `
+      <div id="improve-chat-header">
+        <span>&#10024; AI Post Assistant</span>
+        <button id="improve-chat-close" aria-label="Close">&times;</button>
+      </div>
+      <div id="improve-chat-messages"></div>
+      <div id="improve-chat-input-row">
+        <button id="improve-chat-apply" type="button" aria-label="Apply suggestion" title="Apply suggestion to post" style="display:none;">Apply</button>
+        <textarea id="improve-chat-input" rows="1" placeholder="Reply to the assistant…"></textarea>
+        <button id="improve-chat-send" type="button" aria-label="Send">&#x27A4;</button>
+      </div>
+    `;
+    form.appendChild(chatPanel);
 
-    improveBtn.addEventListener('click', async function() {
-        const text = textarea.value.trim();
-        if (!text) return;
-        errorDiv.style.display = 'none';
-        improveBtn.disabled = true;
-        improveBtn.textContent = 'Improving...';
+    let improveHistory = [];
+    let panelOpen = false;
+    let lastSuggestion = null; // most recent [SUGGESTION]: text
+
+    const chatClose = document.getElementById('improve-chat-close');
+    const chatInput = document.getElementById('improve-chat-input');
+    const chatSend  = document.getElementById('improve-chat-send');
+    const chatApply = document.getElementById('improve-chat-apply');
+    const chatMsgs  = document.getElementById('improve-chat-messages');
+
+    function isConfirmation(text) {
+        const s = text.toLowerCase().trim().replace(/[!.?]+$/, '');
+
+        // Reject if the message also asks for a change
+        const modifiers = ['but', 'however', 'except', 'although', 'change', 'make it',
+            'more', 'less', 'shorter', 'longer', 'different', 'instead', 'rather',
+            'actually', 'wait', 'not quite', 'almost', "don't", 'no,'];
+        if (modifiers.some(w => s.includes(w))) return false;
+
+        const exact = [
+            'yes', 'yep', 'yeah', 'yup', 'ok', 'okay', 'sure', 'good', 'fine',
+            'alright', 'perfect', 'great', 'love it', 'looks good', 'sounds good',
+            "that's good", "that's great", "that's perfect", "that works", "that's fine",
+            'use it', 'use this', 'use that', 'apply it', 'go ahead', 'do it',
+            'i like it', 'i love it', 'approved', 'accept', 'confirm', 'confirmed',
+            'all good', 'looks fine', 'sounds fine', 'seems fine'
+        ];
+        if (exact.some(p => s === p)) return true;
+
+        const patterns = [
+            /^this is (fine|ok|okay|good|great|perfect|awesome|nice)$/,
+            /^that('?s| is) (fine|ok|okay|good|great|perfect|awesome|nice)$/,
+            /^(looks|sounds|seems) (fine|ok|okay|good|great|perfect)( to me)?$/,
+            /^i (like|love) (it|this|that)$/,
+            /^(this |that )?(works?)( for me)?$/,
+            /^i('?m| am) (happy|satisfied|good) with (it|this|that)$/,
+            /^(yes|yeah|yep|sure),? (this |that )?(is )?(fine|ok|okay|good|great|perfect)$/,
+            /^(this |that |it )?(is )?(fine|ok|okay|good|great|perfect)( (by me|for me|with me))?$/,
+        ];
+        return patterns.some(p => p.test(s));
+    }
+
+    function openPanel() {
+        chatPanel.style.display = 'block';
+        panelOpen = true;
+        improveBtn.innerHTML = '&#10006; Close AI chat';
+        improveBtn.className = 'btn btn-outline-danger';
+    }
+
+    function closePanel() {
+        chatPanel.style.display = 'none';
+        panelOpen = false;
+        improveHistory = [];
+        lastSuggestion = null;
+        chatMsgs.innerHTML = '';
+        chatApply.style.display = 'none';
+        improveBtn.innerHTML = '&#10024; Improve with AI';
+        improveBtn.className = 'btn btn-outline-secondary';
+    }
+
+    chatClose.addEventListener('click', closePanel);
+    chatApply.addEventListener('click', function() {
+        if (lastSuggestion) { textarea.value = lastSuggestion; closePanel(); }
+    });
+
+    function addBubble(text, role) {
+        const row = document.createElement('div');
+        row.className = 'improve-msg-row ' + role;
+
+        if (role === 'bot') {
+            // Extract [SUGGESTION]: tag if present
+            const match = text.match(/\[SUGGESTION\]:\s*(.+?)(?:\n|$)/);
+            if (match) {
+                lastSuggestion = match[1].trim();
+                chatApply.style.display = 'flex';
+                const remainder = text.replace(/\[SUGGESTION\]:\s*.+?(\n|$)/, '').trim();
+
+                const suggBlock = document.createElement('div');
+                suggBlock.className = 'improve-suggestion-block';
+                suggBlock.textContent = lastSuggestion;
+                row.appendChild(suggBlock);
+
+                if (remainder) {
+                    const restBubble = document.createElement('div');
+                    restBubble.className = 'improve-bubble bot';
+                    restBubble.style.marginTop = '4px';
+                    restBubble.textContent = remainder;
+                    row.appendChild(restBubble);
+                }
+            } else {
+                const bubble = document.createElement('div');
+                bubble.className = 'improve-bubble bot';
+                bubble.textContent = text;
+                row.appendChild(bubble);
+            }
+        } else {
+            const bubble = document.createElement('div');
+            bubble.className = 'improve-bubble user';
+            bubble.textContent = text;
+            row.appendChild(bubble);
+        }
+
+        chatMsgs.appendChild(row);
+        chatMsgs.scrollTop = chatMsgs.scrollHeight;
+    }
+
+    function addThinking() {
+        const row = document.createElement('div');
+        row.className = 'improve-msg-row bot';
+        const bubble = document.createElement('div');
+        bubble.className = 'improve-bubble bot thinking';
+        bubble.textContent = 'Thinking…';
+        row.appendChild(bubble);
+        chatMsgs.appendChild(row);
+        chatMsgs.scrollTop = chatMsgs.scrollHeight;
+        return row;
+    }
+
+    async function sendMessage(message, showInUI) {
+        if (showInUI) addBubble(message, 'user');
+        const thinkingRow = addThinking();
+        chatSend.disabled = true;
+
         try {
-            const response = await fetch('/improve-post', {
+            const res = await fetch('/chat', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({text})
+                body: JSON.stringify({ message, history: improveHistory })
             });
-            const data = await response.json();
-            if (data.text) {
-                textarea.value = data.text;
-            } else if (data.error) {
-                errorDiv.textContent = 'Error: ' + data.error;
-                errorDiv.style.display = 'block';
-            }
+            const data = await res.json();
+            const reply = data.response || ('Error: ' + (data.error || 'Unknown error'));
+            thinkingRow.remove();
+            addBubble(reply, 'bot');
+            improveHistory.push({ role: 'user', content: message });
+            improveHistory.push({ role: 'assistant', content: reply });
         } catch (e) {
-            errorDiv.textContent = 'Request failed: ' + e.message;
-            errorDiv.style.display = 'block';
+            thinkingRow.remove();
+            addBubble('Request failed: ' + e.message, 'bot');
         } finally {
-            improveBtn.disabled = false;
-            improveBtn.textContent = 'Improve with AI';
+            chatSend.disabled = false;
+            chatInput.focus();
         }
+    }
+
+    improveBtn.addEventListener('click', function() {
+        if (panelOpen) { closePanel(); return; }
+        const text = textarea.value.trim();
+        if (!text) return;
+        openPanel();
+        const prompt = (
+            `I'm writing a microblog post and want your help improving it. ` +
+            `Here's my draft: "${text}". ` +
+            `Please suggest an improved version that is more engaging, clear, and expressive. ` +
+            `Format your response EXACTLY like this — the tag on its own line, then your question:\n\n` +
+            `[SUGGESTION]: <your improved post text here>\n\n` +
+            `Is this ok? Or would you like any changes?\n\n` +
+            `Keep suggestions under 140 characters. ` +
+            `If I ask for changes, always use the exact same [SUGGESTION]: format for your revised version.`
+        );
+        sendMessage(prompt, false);
+    });
+
+    chatSend.addEventListener('click', function() {
+        const msg = chatInput.value.trim();
+        if (!msg) return;
+        chatInput.value = '';
+        chatInput.style.height = 'auto';
+
+        // If user confirms and we have a pending suggestion, apply it
+        if (lastSuggestion && isConfirmation(msg)) {
+            textarea.value = lastSuggestion;
+            closePanel();
+            return;
+        }
+
+        sendMessage(msg, true);
+    });
+
+    chatInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); chatSend.click(); }
+    });
+
+    chatInput.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = this.scrollHeight + 'px';
     });
 });
 </script>
