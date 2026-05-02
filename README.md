@@ -41,10 +41,10 @@ Current AI experiences include:
 ![alt text](images/improvewithai.png)
 
 - **Floating assistant**: authenticated users can ask general questions from any page. When the question appears to ask about community posts or the user's own messages, the route retrieves relevant context before calling the model.
-![alt text](images/floatingassistant.png)
+![alt text](images/floatingassistantai.png)
 
 - **Conversation summaries**: message threads include a Summarize button that condenses recent messages into a short plain-language recap.
-![alt text](images/messagesummary.png)
+![alt text](images/messagesummaryai.png)
 
 - **Retrieval-augmented context**: public posts and the current user's own messages are embedded and searched semantically. The assistant is instructed not to invent missing private-message content or reveal messages outside the current user's access.
 
