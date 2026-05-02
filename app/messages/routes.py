@@ -44,6 +44,7 @@ def inbox(username=None):
     active_user = None
     messages = []
     form = None
+    has_more = False
 
     if username:
         active_user = User.query.filter_by(username=username).first_or_404()
@@ -58,17 +59,55 @@ def inbox(username=None):
             flash('Message sent.')
             return redirect(url_for('messages.inbox', username=username))
 
-        messages = Message.query.filter(
+        PAGE = 20
+        msgs = Message.query.filter(
             db.or_(
                 db.and_(Message.sender_id == current_user.id,
                         Message.recipient_id == active_user.id),
                 db.and_(Message.sender_id == active_user.id,
                         Message.recipient_id == current_user.id)
             )
-        ).order_by(Message.timestamp.asc()).all()
+        ).order_by(Message.timestamp.desc()).limit(PAGE).all()
+        msgs.reverse()
+        messages = msgs
+        has_more = len(msgs) == PAGE
 
     return render_template('messages/inbox.html',
                            partners=partners,
                            active_user=active_user,
                            messages=messages,
+                           has_more=has_more,
                            form=form)
+
+
+@bp.route('/messages/<username>/history')
+@login_required
+def message_history(username):
+    partner = User.query.filter_by(username=username).first_or_404()
+    before_id = request.args.get('before_id', type=int)
+    limit = 20
+
+    query = Message.query.filter(
+        db.or_(
+            db.and_(Message.sender_id == current_user.id,
+                    Message.recipient_id == partner.id),
+            db.and_(Message.sender_id == partner.id,
+                    Message.recipient_id == current_user.id)
+        )
+    )
+    if before_id:
+        query = query.filter(Message.id < before_id)
+
+    msgs = query.order_by(Message.timestamp.desc()).limit(limit).all()
+    msgs.reverse()
+
+    return {
+        'messages': [{
+            'id': m.id,
+            'body': m.body,
+            'is_mine': m.sender_id == current_user.id,
+            'timestamp_iso': m.timestamp.isoformat(),
+            'avatar': partner.avatar(32) if m.sender_id == partner.id else None,
+        } for m in msgs],
+        'has_more': len(msgs) == limit
+    }

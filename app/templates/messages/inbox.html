@@ -1,11 +1,12 @@
 {% extends "base.html" %}
 
-{% block content %}
-<div class="container-fluid" style="height: calc(100vh - 56px);">
-  <div class="row h-100">
+{% block outer_content %}
+<div style="height: calc(100vh - var(--nav-h, 57px)); display: flex; flex-direction: column; overflow: hidden;">
+
+  <div class="d-flex flex-row" style="flex: 1; overflow: hidden;">
 
     <!-- Left sidebar: conversation list -->
-    <div class="col-3 border-end p-0" style="overflow-y: auto;">
+    <div class="border-end" style="width: 280px; flex-shrink: 0; overflow-y: auto;">
       <div class="p-3 border-bottom">
         <h6 class="mb-0 fw-bold">Messages</h6>
       </div>
@@ -14,7 +15,7 @@
         <a href="{{ url_for('messages.inbox', username=partner.username) }}"
            class="d-flex align-items-center p-3 border-bottom text-decoration-none
                   {% if active_user and active_user.id == partner.id %}bg-light{% endif %}">
-          <img src="{{ partner.avatar(40) }}" class="rounded-circle me-2">
+          <img src="{{ partner.avatar(40) }}" class="rounded-circle me-2" style="flex-shrink:0;">
           <div class="overflow-hidden">
             <div class="fw-semibold text-dark small">{{ partner.username }}</div>
             <div class="text-muted" style="font-size:0.75rem; white-space:nowrap;
@@ -30,48 +31,61 @@
     </div>
 
     <!-- Right panel: active conversation -->
-    <div class="col-9 d-flex flex-column p-0">
+    <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
       {% if active_user %}
 
         <!-- Chat header -->
-        <div class="p-3 border-bottom d-flex align-items-center">
+        <div class="p-3 border-bottom d-flex align-items-center" style="flex-shrink: 0;">
           <img src="{{ active_user.avatar(36) }}" class="rounded-circle me-2">
           <span class="fw-semibold">{{ active_user.username }}</span>
           <a href="{{ url_for('main.user', username=active_user.username) }}"
              class="ms-2 text-muted small">View profile</a>
         </div>
 
-        <!-- Messages -->
-        <div class="flex-grow-1 p-3" style="overflow-y: auto;">
-          {% for message in messages %}
-          <div class="d-flex mb-3
-               {% if message.sender_id == current_user.id %}justify-content-end{% endif %}">
-            {% if message.sender_id != current_user.id %}
-              <img src="{{ active_user.avatar(32) }}" class="rounded-circle me-2 align-self-end">
-            {% endif %}
-            <div class="p-2 px-3 rounded-3"
-                 style="max-width: 65%;
-                 {% if message.sender_id == current_user.id %}
-                   background: #0d6efd; color: white;
-                 {% else %}
-                   background: #f0f2f5; color: #333;
-                 {% endif %}">
-              <div style="font-size: 0.9rem;">{{ message.body }}</div>
-              <div style="font-size: 0.7rem; opacity: 0.7; margin-top: 2px;">
-                {{ moment(message.timestamp).fromNow() }}
+        <!-- Messages (scrollable) -->
+        <div id="messages-container"
+             data-username="{{ active_user.username }}"
+             data-oldest-id="{{ messages[0].id if messages else '' }}"
+             data-has-more="{{ 'true' if has_more else 'false' }}"
+             style="flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column;">
+
+          <!-- Sentinel: triggers loading older messages when scrolled into view -->
+          <div id="load-more-sentinel" style="height: 1px;"></div>
+
+          <div id="load-more-indicator" class="text-center text-muted small py-2" style="display:none;">
+            Loading older messages...
+          </div>
+
+          <div id="message-list" style="margin-top: auto;">
+            {% for message in messages %}
+            <div class="d-flex mb-3 {% if message.sender_id == current_user.id %}justify-content-end{% endif %}"
+                 data-msg-id="{{ message.id }}">
+              {% if message.sender_id != current_user.id %}
+                <img src="{{ active_user.avatar(32) }}" class="rounded-circle me-2 align-self-end" style="flex-shrink:0;">
+              {% endif %}
+              <div class="p-2 px-3 rounded-3"
+                   style="max-width: 65%;
+                   {% if message.sender_id == current_user.id %}
+                     background: #0d6efd; color: white;
+                   {% else %}
+                     background: #f0f2f5; color: #333;
+                   {% endif %}">
+                <div style="font-size: 0.9rem;">{{ message.body }}</div>
+                <div style="font-size: 0.7rem; opacity: 0.7; margin-top: 2px;">
+                  {{ moment(message.timestamp).fromNow() }}
+                </div>
               </div>
             </div>
+            {% endfor %}
           </div>
-          {% endfor %}
         </div>
 
         <!-- Send form -->
-        <div class="p-3 border-top">
+        <div class="p-3 border-top" style="flex-shrink: 0;">
           <form method="POST">
             {{ form.hidden_tag() }}
             <div class="d-flex gap-2">
-              {{ form.body(class="form-control", rows=1,
-                 placeholder="Write a message...") }}
+              {{ form.body(class="form-control", rows=1, placeholder="Write a message...") }}
               {{ form.submit(class="btn btn-primary") }}
             </div>
           </form>
@@ -90,4 +104,79 @@
 
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+{% if active_user %}
+<script>
+(function () {
+  const container = document.getElementById('messages-container');
+  const list = document.getElementById('message-list');
+  const sentinel = document.getElementById('load-more-sentinel');
+  const indicator = document.getElementById('load-more-indicator');
+
+  // Scroll to bottom on initial load
+  container.scrollTop = container.scrollHeight;
+
+  let oldestId = container.dataset.oldestId ? parseInt(container.dataset.oldestId) : null;
+  let hasMore = container.dataset.hasMore === 'true';
+  let loading = false;
+  const username = container.dataset.username;
+
+  function buildMessageHTML(msg) {
+    const alignClass = msg.is_mine ? 'justify-content-end' : '';
+    const bubbleStyle = msg.is_mine
+      ? 'background:#0d6efd;color:white;'
+      : 'background:#f0f2f5;color:#333;';
+    const avatar = !msg.is_mine && msg.avatar
+      ? `<img src="${msg.avatar}" class="rounded-circle me-2 align-self-end" style="flex-shrink:0;width:32px;height:32px;">`
+      : '';
+    const ts = new Date(msg.timestamp_iso).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    return `
+      <div class="d-flex mb-3 ${alignClass}" data-msg-id="${msg.id}">
+        ${avatar}
+        <div class="p-2 px-3 rounded-3" style="max-width:65%;${bubbleStyle}">
+          <div style="font-size:0.9rem;">${msg.body}</div>
+          <div style="font-size:0.7rem;opacity:0.7;margin-top:2px;">${ts}</div>
+        </div>
+      </div>`;
+  }
+
+  async function loadOlder() {
+    if (loading || !hasMore || !oldestId) return;
+    loading = true;
+    indicator.style.display = 'block';
+
+    const prevHeight = container.scrollHeight;
+
+    try {
+      const res = await fetch(`/messages/${username}/history?before_id=${oldestId}`);
+      const data = await res.json();
+
+      if (data.messages.length > 0) {
+        const html = data.messages.map(buildMessageHTML).join('');
+        list.insertAdjacentHTML('afterbegin', html);
+        oldestId = data.messages[0].id;
+        // Preserve scroll position after prepend
+        container.scrollTop = container.scrollHeight - prevHeight;
+      }
+
+      hasMore = data.has_more;
+      if (!hasMore) observer.disconnect();
+    } finally {
+      loading = false;
+      indicator.style.display = 'none';
+    }
+  }
+
+  const observer = new IntersectionObserver((entries) => {
+    if (entries[0].isIntersecting) loadOlder();
+  }, { root: container, threshold: 0 });
+
+  if (hasMore) {
+    observer.observe(sentinel);
+  }
+})();
+</script>
+{% endif %}
 {% endblock %}

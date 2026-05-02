@@ -9,6 +9,7 @@ from app import db
 from app.main.forms import EditProfileForm, EmptyForm, PostForm
 from app.models import User, Post
 from app.translate import translate
+from app import ai_improve
 from app.main import bp
 
 
@@ -150,3 +151,16 @@ def translate_text():
     return {'text': translate(data['text'],
                               data['source_language'],
                               data['dest_language'])}
+
+
+@bp.route('/improve-post', methods=['POST'])
+@login_required
+def improve_post():
+    data = request.get_json()
+    text = (data or {}).get('text', '')
+    if not text:
+        return {'error': 'No text provided'}, 400
+    try:
+        return {'text': ai_improve.improve_post(text)}
+    except Exception as e:
+        return {'error': str(e)}, 500

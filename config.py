@@ -17,4 +17,5 @@ class Config:
     ADMINS = ['your-email@example.com']
     LANGUAGES = ['en', 'es']
     MS_TRANSLATOR_KEY = os.environ.get('MS_TRANSLATOR_KEY')
+    OPENROUTER_API_KEY = os.environ.get('OPENROUTER_API_KEY')
     POSTS_PER_PAGE = 25

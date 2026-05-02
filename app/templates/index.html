@@ -24,3 +24,48 @@
         </ul>
     </nav>
 {% endblock %}
+
+{% block scripts %}
+{% if form %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.querySelector('form');
+    if (!form) return;
+    const textarea = form.querySelector('textarea');
+    const submitBtn = form.querySelector('[type=submit]');
+    if (!textarea || !submitBtn) return;
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'd-flex align-items-center gap-2';
+    submitBtn.parentNode.insertBefore(wrapper, submitBtn);
+    wrapper.appendChild(submitBtn);
+    submitBtn.classList.remove('mb-3');
+
+    const improveBtn = document.createElement('button');
+    improveBtn.type = 'button';
+    improveBtn.className = 'btn btn-secondary';
+    improveBtn.textContent = 'Improve with AI';
+    wrapper.appendChild(improveBtn);
+
+    improveBtn.addEventListener('click', async function() {
+        const text = textarea.value.trim();
+        if (!text) return;
+        improveBtn.disabled = true;
+        improveBtn.textContent = 'Improving...';
+        try {
+            const response = await fetch('/improve-post', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({text})
+            });
+            const data = await response.json();
+            if (data.text) textarea.value = data.text;
+        } finally {
+            improveBtn.disabled = false;
+            improveBtn.textContent = 'Improve with AI';
+        }
+    });
+});
+</script>
+{% endif %}
+{% endblock %}
