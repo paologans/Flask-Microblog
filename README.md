@@ -101,7 +101,7 @@ The same embedding infrastructure supports semantic retrieval for chatbot contex
 
 | Path | Purpose |
 |---|---|
-| `microblog.py` | Flask entry point and shell context |
+| `postmind.py` | Flask entry point and shell context |
 | `config.py` | App configuration and environment variable loading |
 | `app/__init__.py` | App factory, extensions, blueprint registration, logging |
 | `app/models.py` | User, Post, Message, followers, and post likes models |
@@ -200,8 +200,6 @@ flask translate compile
 
 ## Credits
 
-This project began as a version of Miguel Grinberg's Flask Mega-Tutorial application:
-
-https://github.com/miguelgrinberg/microblog
+This project began as a version of Miguel Grinberg's Flask Mega-Tutorial application.
 
 Postmind extends that foundation with messaging, search, recommendations, post likes, translation, AI writing assistance, AI chat, message summaries, embeddings, retrieval, seeded demo data, and expanded tests.

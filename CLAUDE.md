@@ -56,7 +56,7 @@ Required in `.env` (never committed):
 | `app.messages` | `/messages` | Inbox, conversation view, message send, lazy-load history |
 | `app.errors` | — | 404 / 500 handlers |
 
-`microblog.py` at the root is the entry point — calls `create_app()` and registers shell context.
+`postmind.py` at the root is the entry point — calls `create_app()` and registers shell context.
 
 ### Models (`app/models.py`)
 
