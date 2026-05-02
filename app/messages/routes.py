@@ -59,7 +59,7 @@ def inbox(username=None):
             return redirect(url_for('messages.inbox', username=username))
 
         PAGE = 20
-        msgs = db.session.scalars(
+        messages = list(reversed(db.session.scalars(
             sa.select(Message).where(
                 sa.or_(
                     sa.and_(Message.sender_id == current_user.id,
@@ -68,10 +68,8 @@ def inbox(username=None):
                             Message.recipient_id == current_user.id)
                 )
             ).order_by(Message.timestamp.desc()).limit(PAGE)
-        ).all()
-        msgs = list(reversed(msgs))
-        messages = msgs
-        has_more = len(msgs) == PAGE
+        ).all()))
+        has_more = len(messages) == PAGE
 
     return render_template('messages/inbox.html',
                            partners=partners,

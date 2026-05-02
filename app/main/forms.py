@@ -38,8 +38,5 @@ class PostForm(FlaskForm):
 class SearchForm(FlaskForm):
     q = StringField(_l('Search'), validators=[DataRequired(), Length(min=1, max=100)])
 
-    def __init__(self, *args, **kwargs):
-        # GET forms don't need CSRF
-        if 'meta' not in kwargs:
-            kwargs['meta'] = {'csrf': False}
-        super().__init__(*args, **kwargs)
+    class Meta:
+        csrf = False

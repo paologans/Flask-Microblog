@@ -8,7 +8,6 @@
       Results for <strong>{{ q }}</strong>
     </h5>
 
-    <!-- Type filter tabs -->
     <ul class="nav nav-tabs mb-4">
       <li class="nav-item">
         <a class="nav-link {% if result_type == 'all' %}active{% endif %}"
@@ -34,7 +33,6 @@
       {% endif %}
     {% endmacro %}
 
-    <!-- Users section -->
     {% if result_type in ('all', 'users') %}
     <section class="mb-5">
       {% if result_type == 'all' %}
@@ -66,7 +64,6 @@
     </section>
     {% endif %}
 
-    <!-- Posts section -->
     {% if result_type in ('all', 'posts') %}
     <section>
       {% if result_type == 'all' %}

@@ -4,6 +4,7 @@ from flask import render_template, flash, redirect, url_for, request, g, \
 from flask_login import current_user, login_required
 from flask_babel import _, get_locale
 import sqlalchemy as sa
+import sqlalchemy.orm as so
 from langdetect import detect, LangDetectException
 from app import db
 from app.main.forms import EditProfileForm, EmptyForm, PostForm, SearchForm
@@ -180,7 +181,6 @@ def search():
     q = form.q.data.strip()
     result_type = request.args.get('type', 'all')
 
-    # Subqueries to determine relationship tier for any given user id
     is_following = (
         sa.select(followers)
         .where(followers.c.follower_id == current_user.id)
@@ -215,8 +215,7 @@ def search():
 
     post_results = []
     if result_type in ('all', 'posts'):
-        # Alias User for the join so tier subquery still refers to User.id correctly
-        Author = sa.orm.aliased(User, flat=True)
+        Author = so.aliased(User)
         author_is_following = (
             sa.select(followers)
             .where(followers.c.follower_id == current_user.id)
