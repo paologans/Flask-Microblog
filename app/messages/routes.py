@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from flask import render_template, redirect, url_for, request, flash
 from flask_login import current_user, login_required
 import sqlalchemy as sa
-from app import db
+from app import db, ai_improve
 from app.messages import bp
 from app.messages.forms import MessageForm
 from app.models import User, Message
@@ -112,3 +112,38 @@ def message_history(username):
         } for m in msgs],
         'has_more': len(msgs) == limit
     }
+
+
+@bp.route('/messages/<username>/summarize')
+@login_required
+def summarize(username):
+    partner = db.first_or_404(sa.select(User).where(User.username == username))
+
+    msgs = list(reversed(db.session.scalars(
+        sa.select(Message).where(
+            sa.or_(
+                sa.and_(Message.sender_id == current_user.id,
+                        Message.recipient_id == partner.id),
+                sa.and_(Message.sender_id == partner.id,
+                        Message.recipient_id == current_user.id)
+            )
+        ).order_by(Message.timestamp.desc()).limit(10)
+    ).all()))
+
+    if not msgs:
+        return {'error': 'No messages to summarize'}, 400
+
+    formatted = [
+        {'body': m.body, 'is_mine': m.sender_id == current_user.id}
+        for m in msgs
+    ]
+
+    try:
+        summary = ai_improve.summarize_conversation(
+            formatted,
+            user_a=current_user.username,
+            user_b=partner.username
+        )
+        return {'summary': summary}
+    except Exception as e:
+        return {'error': str(e)}, 500

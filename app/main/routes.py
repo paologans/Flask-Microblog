@@ -11,7 +11,6 @@ from app.main.forms import EditProfileForm, EmptyForm, PostForm, SearchForm
 from app.models import User, Post, followers
 from app.translate import translate
 from app import ai_improve
-from app.retrieval import find_similar_posts
 from app.embeddings import embed_to_json
 from app.main import bp
 
@@ -165,8 +164,7 @@ def improve_post():
     if not text:
         return {'error': 'No text provided'}, 400
     try:
-        similar = find_similar_posts(text, exclude_user_id=current_user.id)
-        return {'text': ai_improve.improve_post(text, similar_posts=similar)}
+        return {'text': ai_improve.improve_post(text)}
     except Exception as e:
         return {'error': str(e)}, 500
 

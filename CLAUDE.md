@@ -77,9 +77,11 @@ Three tables: `User`, `Post`, `Message`. `followers` is an association table for
 
 ### AI Feature (`app/ai_improve.py`)
 
-Uses the `openai` Python package pointed at OpenRouter's base URL (`https://openrouter.ai/api/v1`). Uses model `openai/gpt-oss-120b:free` via OpenRouter with reasoning enabled (`extra_body={'reasoning': {'enabled': True}}`). The `POST /improve-post` route in `app/main/routes.py` calls this and returns JSON — the frontend replaces the textarea value in-place.
+Uses the `openai` Python package pointed at OpenRouter's base URL (`https://openrouter.ai/api/v1`), model `openai/gpt-oss-120b:free`, reasoning enabled. Both functions share a `_client()` helper.
 
-The feature is RAG-powered: before calling the LLM, the route retrieves the 5 most semantically similar posts from other users and injects them as stylistic reference context.
+Two AI functions in `app/ai_improve.py`:
+- `improve_post(text)` — called by `POST /improve-post`; improves a draft post in-place. Direct call, no retrieval.
+- `summarize_conversation(messages, user_a, user_b)` — called by `POST /messages/<username>/summarize`; summarizes up to the last 10 messages (or however many exist) in chronological order. Format passed to LLM: `Username said: "body"` per line. Prompt asks for key topics, tone, and any conclusions/next steps.
 
 ### RAG Pipeline
 
@@ -92,6 +94,8 @@ The feature is RAG-powered: before calling the LLM, the route retrieves the 5 mo
 **On post creation** — `main/routes.py` calls `embed_to_json(body)` and stores it on the `Post` immediately.
 
 **Seed** — `seed.py` batch-encodes all post bodies after creation using `embed_batch()` for efficiency.
+
+The RAG pipeline (`app/retrieval.py`) is built and ready but not yet wired to any route — reserved for a future summarizer or discovery feature.
 
 ### Search (`GET /search`)
 
@@ -108,6 +112,8 @@ Users matched on `username` and `about_me`. Posts matched on `body`. Results tem
 
 The inbox uses lazy-loading: `GET /messages/<username>` renders only the 20 most recent messages. Older messages are fetched via `GET /messages/<username>/history?before_id=<id>` (JSON), triggered by an `IntersectionObserver` on a sentinel div at the top of the message list.
 
+`GET /messages/<username>/summarize` — retrieves up to the last 10 messages (however many exist) in chronological order and returns an AI summary. Uses system + user message structure: system sets the summarization role, user message contains the transcript as `Username said: "body"` lines. The "Summarize" button sits left of the Send button in the send bar; the summary appears in a dismissible card above the message list.
+
 ### i18n
 
 Strings wrapped with `_()` or `_l()` are extracted via Babel. Translations live in `app/translations/<lang>/LC_MESSAGES/`. The active locale is resolved from `Accept-Language` headers against `Config.LANGUAGES = ['en', 'es']`.
@@ -121,5 +127,5 @@ Strings wrapped with `_()` or `_l()` are extracted via Babel. Translations live 
 | `app/embeddings.py` | sentence-transformers wrapper (`all-MiniLM-L6-v2`) |
 | `app/retrieval.py` | Cosine similarity retrieval over Post embeddings |
 | `app/translate.py` | Microsoft Translator integration |
-| `seed.py` | Full database seeder (30 users, posts, conversations, embeddings) |
+| `seed.py` | Full database seeder — 30 users, varied posts (phrases/sentences/paragraphs), 15 natural conversation templates with variable timing (seconds to days between messages), embeddings |
 | `query_users.py` | CLI table of all users with stats |
